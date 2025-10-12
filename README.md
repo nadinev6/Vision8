@@ -6,17 +6,24 @@
 
 
 <p align="center">
-  A V2V app for AI-powered video analysis and generation.
-</p>
-
-<p align="center">
   <a href="https://react.dev/" target="_blank"><img src="https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React"></a>
   <a href="https://www.typescriptlang.org/" target="_blank"><img src="https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript"></a>
   <a href="https://tailwindcss.com/" target="_blank"><img src="https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" alt="Tailwind CSS"></a>
   <a href="https://deepmind.google/technologies/gemini/" target="_blank"><img src="https://img.shields.io/badge/Google_Gemini-8E44AD?style=for-the-badge&logo=google-cloud&logoColor=white" alt="Google Gemini"></a>
 </p>
 
-{{TOC}}
+## Table of Contents
+
+  - [🚀 About Vision 8](#about-vision-8)
+    - [🎯 Video-to-Video Generation](#video-to-video-generation)
+  - [✨ Key Features](#key-features)
+  - [💻 Technology Stack](#technology-stack)
+  - [🛠️ Getting Started](#getting-started)
+    - [Prerequisites](#prerequisites)
+    - [Installation](#installation)
+  - [🤝 Contributing](#contributing)
+  - [📄 License](#license)
+
 
 ## 🚀 About Vision 8
 
