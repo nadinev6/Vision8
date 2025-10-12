@@ -3,12 +3,12 @@ import { LightbulbIcon as Lightbulb, MicIcon as Mic, VideoSearchIcon, VideoIcon,
 import { cn } from '../lib/utils';
 
 const PLACEHOLDERS = [
-  "Search for the scene where Jack says 'I love you'",
-  "Find any instances of a blue Toyota",
+  "Search for the specific scene where the Joker gets knocked over",
+  "Find a the scene where Jack says 'I love you'",
   "How many times does a cat appear in this film?",
   "Where else does the lady in the red dress appear?",
   "How many scenes need to be changed in order to replace the cat?",
-  "Summarize this film",
+  "Summarize this film focusing on the main characters",
 ];
 
 interface AIChatInputProps {
@@ -168,7 +168,7 @@ const AIChatInput: React.FC<AIChatInputProps> = ({ onVideoUpload }) => {
               <button
                 className={cn(`flex items-center gap-1 py-2 rounded-full transition-all duration-300 font-medium whitespace-nowrap overflow-hidden`,
                   videoSearchActive
-                    ? "bg-gray-200 text-gray-800 font-semibold w-32 px-4 justify-start"
+                    ? "bg-gray-200 text-gray-800 font-semibold w-fit px-4 justify-start"
                     : "bg-gray-100 text-gray-700 hover:bg-gray-200 w-9 px-2 justify-center"
                 )}
                 title="Video Search"
