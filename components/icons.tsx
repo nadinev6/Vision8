@@ -163,6 +163,18 @@ export const Maximize2Icon: React.FC<IconProps> = ({ className, size = 24 }) => 
     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
 );
 
+export const Minimize2Icon: React.FC<IconProps> = ({ className, size = 24 }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="4 14 10 14 10 20"></polyline><polyline points="20 10 14 10 14 4"></polyline><line x1="14" y1="10" x2="21" y2="3"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
+);
+
+export const SkipBackIcon: React.FC<IconProps> = ({ className, size = 24 }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></svg>
+);
+
+export const SkipForwardIcon: React.FC<IconProps> = ({ className, size = 24 }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>
+);
+
 export const RotateCwIcon: React.FC<IconProps> = ({ className, size = 24 }) => (
     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path></svg>
 );
@@ -177,5 +189,11 @@ export const SettingsIcon: React.FC<IconProps> = ({ className, size = 24 }) => (
 export const ThoughtIcon: React.FC<IconProps> = ({ className, size = 18 }) => (
     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 20 20" className={className}>
         <path fill="currentColor" d="m14.878.282l.348 1.071a2.2 2.2 0 0 0 1.399 1.397l1.071.348l.021.006a.423.423 0 0 1 0 .798l-1.071.348a2.2 2.2 0 0 0-1.399 1.397l-.348 1.07a.423.423 0 0 1-.798 0l-.349-1.07a2.2 2.2 0 0 0-.532-.867a2.2 2.2 0 0 0-.866-.536l-1.071-.348a.423.423 0 0 1 0-.798l1.071-.348a2.2 2.2 0 0 0 1.377-1.397l.348-1.07a.423.423 0 0 1 .799 0m4.905 7.931l-.766-.248a1.58 1.58 0 0 1-.998-.999l-.25-.764a.302.302 0 0 0-.57 0l-.248.764a1.58 1.58 0 0 1-.984.999l-.765.248a.303.303 0 0 0 0 .57l.765.249a1.58 1.58 0 0 1 1 1.002l.248.764a.302.302 0 0 0 .57 0l.249-.764a1.58 1.58 0 0 1 .999-.999l.765-.248a.303.303 0 0 0 0-.57zM16.97 11.89a1.46 1.46 0 0 0 1.013.038q.016.158.016.32a3.25 3.25 0 0 1-2.575 3.178l-.037.185A2.973 2.973 0 0 1 10 16.678a2.973 2.973 0 0 1-5.388-1.068l-.037-.185a3.248 3.248 0 0 1-.77-6.088A2.5 2.5 0 0 1 3 7.5v-.198a2.7 2.7 0 0 1 2.169-2.646l.406-.08l.125-.628a2.423 2.423 0 0 1 4.3-1a2.4 2.4 0 0 1 .293-.318l-.033.045c-.17.24-.26.52-.26.821s.09.581.26.821q.104.147.24.265v10.445a1.973 1.973 0 0 0 3.907.387l.103-.512a.5.5 0 0 1 .392-.392l.291-.059a2.25 2.25 0 0 0 1.778-2.562M9.5 15.027V4.423a1.423 1.423 0 0 0-2.819-.279l-.19.954a.5.5 0 0 1-.393.392l-.733.147A1.7 1.7 0 0 0 4 7.302V7.5A1.5 1.5 0 0 0 5.5 9a.5.5 0 0 1 0 1h-.252a2.248 2.248 0 0 0-.441 4.451l.291.059a.5.5 0 0 1 .392.392l.103.512a1.973 1.973 0 0 0 3.907-.387"/>
+    </svg>
+);
+
+export const LogoIcon: React.FC<IconProps> = ({ className, size = 32 }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 32 32" className={className}>
+        <path fill="currentColor" d="M23 23c-5.656 0-7.858-6.41-7.949-6.684C15.034 16.265 13.208 11 9 11c-2.757 0-5 2.243-5 5s2.243 5 5 5c1.588 0 3.013-.732 4.237-2.176l1.526 1.293C13.164 22.003 11.172 23 9 23c-3.86 0-7-3.14-7-7s3.14-7 7-7c5.656 0 7.858 6.41 7.949 6.684C16.966 15.735 18.792 21 23 21c2.757 0 5-2.243 5-5s-2.243-5-5-5c-1.588 0-3.013-.732-4.237 2.176l-1.526-1.293C18.836 9.997 20.828 9 23 9c3.86 0 7 3.14 7 7s-3.14 7-7 7"/>
     </svg>
 );

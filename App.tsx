@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import HistorySidebar from './components/HistorySidebar';
 import AnalysisPanel from './components/AnalysisPanel';
 import VideoChatArea from './components/VideoChatArea';
+import { LogoIcon, UserIcon } from './components/icons';
 
 const App: React.FC = () => {
     const [isHistoryOpen, setIsHistoryOpen] = useState(true);
@@ -38,8 +39,13 @@ const App: React.FC = () => {
 
     return (
         <div className="h-screen w-screen bg-gray-50 flex flex-col">
-            <header className="flex-shrink-0 bg-white border-b border-gray-200 px-4 h-[65px] flex items-center">
-                <h1 className="text-xl font-bold text-gray-800">Vision 8</h1>
+            <header className="flex-shrink-0 bg-white border-b border-gray-200 px-4 h-[65px] flex items-center justify-between">
+                <div className="h-9 w-9 rounded-full bg-gradient-to-br from-gray-100 to-gray-300 flex items-center justify-center">
+                    <LogoIcon className="text-gray-800" size={20} />
+                </div>
+                <button className="p-2 rounded-full hover:bg-gray-100 transition-colors" aria-label="User Login">
+                    <UserIcon className="h-6 w-6 text-gray-600" />
+                </button>
             </header>
             <div className="flex flex-1 overflow-hidden">
                 <HistorySidebar isHistoryOpen={isHistoryOpen} toggleHistory={toggleHistory} />

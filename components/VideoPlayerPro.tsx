@@ -2,12 +2,28 @@ import React, { useRef, useState, useEffect } from "react";
 import { Button } from "./ui/button";
 import { Popover, PopoverTrigger, PopoverContent } from "./ui/popover";
 import { Slider } from "./ui/slider";
-import { PlayIcon, PauseIcon, Volume2Icon, Volume1Icon, VolumeXIcon, Maximize2Icon, RotateCwIcon, SettingsIcon } from "./icons";
+import { PlayIcon, PauseIcon, Volume2Icon, Volume1Icon, VolumeXIcon, Maximize2Icon, Minimize2Icon, RotateCwIcon, SettingsIcon, SkipBackIcon, SkipForwardIcon } from "./icons";
 import { cn } from "../lib/utils";
 
 interface VideoPlayerProProps {
   src: string | null;
   title: string;
+}
+
+// Interfaces for cross-browser fullscreen support
+interface FullscreenableElement extends HTMLDivElement {
+  webkitRequestFullscreen?: () => Promise<void>;
+  mozRequestFullScreen?: () => Promise<void>;
+  msRequestFullscreen?: () => Promise<void>;
+}
+
+interface FullscreenableDocument extends Document {
+  webkitExitFullscreen?: () => Promise<void>;
+  mozCancelFullScreen?: () => Promise<void>;
+  msExitFullscreen?: () => Promise<void>;
+  webkitFullscreenElement?: Element | null;
+  mozFullScreenElement?: Element | null;
+  msFullscreenElement?: Element | null;
 }
 
 const formatTime = (seconds: number) => {
@@ -16,6 +32,9 @@ const formatTime = (seconds: number) => {
   const s = Math.floor(seconds % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
 };
+
+const FRAME_RATE = 30; // Assuming 30 FPS
+const FRAME_STEP = 1 / FRAME_RATE;
 
 const VideoPlayerPro: React.FC<VideoPlayerProProps> = ({ src, title }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -29,6 +48,9 @@ const VideoPlayerPro: React.FC<VideoPlayerProProps> = ({ src, title }) => {
   const [duration, setDuration] = useState<number>(0);
   const [showControls, setShowControls] = useState<boolean>(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
+  const [currentFrame, setCurrentFrame] = useState<number>(0);
+  const [totalFrames, setTotalFrames] = useState<number>(0);
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
 
   useEffect(() => {
     // Reset state when src changes
@@ -37,7 +59,28 @@ const VideoPlayerPro: React.FC<VideoPlayerProProps> = ({ src, title }) => {
     setProgress(0);
     setCurrentTime(0);
     setDuration(0);
+    setCurrentFrame(0);
+    setTotalFrames(0);
   }, [src]);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const doc = document as FullscreenableDocument;
+      setIsFullscreen(!!(doc.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement));
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+    document.addEventListener("mozfullscreenchange", handleFullscreenChange);
+    document.addEventListener("MSFullscreenChange", handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener("webkitfullscreenchange", handleFullscreenChange);
+      document.removeEventListener("mozfullscreenchange", handleFullscreenChange);
+      document.removeEventListener("MSFullscreenChange", handleFullscreenChange);
+    };
+  }, []);
 
   const togglePlay = () => {
     if (!videoRef.current || !src) return;
@@ -54,8 +97,10 @@ const VideoPlayerPro: React.FC<VideoPlayerProProps> = ({ src, title }) => {
     const prog = (videoRef.current.currentTime / videoRef.current.duration) * 100;
     setProgress(isFinite(prog) ? prog : 0);
     setCurrentTime(videoRef.current.currentTime);
+    setCurrentFrame(Math.floor(videoRef.current.currentTime * FRAME_RATE));
     if (videoRef.current.duration) {
       setDuration(videoRef.current.duration);
+      setTotalFrames(Math.floor(videoRef.current.duration * FRAME_RATE));
     }
   };
 
@@ -70,13 +115,46 @@ const VideoPlayerPro: React.FC<VideoPlayerProProps> = ({ src, title }) => {
     if (isFinite(time)) videoRef.current.currentTime = time;
     setProgress(percent);
   };
+  
+  const handleStep = (direction: 'forward' | 'backward') => {
+    if (!videoRef.current || !src) return;
+    
+    if (isPlaying) {
+        videoRef.current.pause();
+        setIsPlaying(false);
+    }
+    
+    const newTime = videoRef.current.currentTime + (direction === 'forward' ? FRAME_STEP : -FRAME_STEP);
+    videoRef.current.currentTime = Math.max(0, Math.min(newTime, videoRef.current.duration));
+  };
 
   const toggleFullscreen = () => {
-    if (!containerRef.current) return;
-    if (!document.fullscreenElement) {
-      containerRef.current.requestFullscreen().catch(err => console.error(err));
+    const doc = document as FullscreenableDocument;
+    const element = containerRef.current as FullscreenableElement;
+    if (!element) return;
+
+    const isInFullScreen = !!(doc.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement);
+
+    if (!isInFullScreen) {
+      if (element.requestFullscreen) {
+        element.requestFullscreen();
+      } else if (element.webkitRequestFullscreen) { /* Safari */
+        element.webkitRequestFullscreen();
+      } else if (element.msRequestFullscreen) { /* IE11 */
+        element.msRequestFullscreen();
+      } else if (element.mozRequestFullScreen) { /* Firefox */
+        element.mozRequestFullScreen();
+      }
     } else {
-      document.exitFullscreen().catch(err => console.error(err));
+      if (doc.exitFullscreen) {
+        doc.exitFullscreen();
+      } else if (doc.webkitExitFullscreen) { /* Safari */
+        doc.webkitExitFullscreen();
+      } else if (doc.msExitFullscreen) { /* IE11 */
+        doc.msExitFullscreen();
+      } else if (doc.mozCancelFullScreen) { /* Firefox */
+        doc.mozCancelFullScreen();
+      }
     }
   };
   
@@ -106,80 +184,89 @@ const VideoPlayerPro: React.FC<VideoPlayerProProps> = ({ src, title }) => {
 
       <div
         className={cn(
-            "absolute bottom-4 left-1/2 transform -translate-x-1/2 w-[95%] backdrop-blur-md bg-black/30 rounded-lg p-2 flex flex-col gap-2 transition-all duration-300 ease-in-out",
+            "absolute bottom-0 left-0 w-full transition-all duration-300 ease-in-out",
             showControls && src ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
         )}
       >
-        <div
-          className="relative w-full h-1.5 bg-white/20 rounded-full cursor-pointer group"
-          onClick={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            handleSeek((x / rect.width) * 100);
-          }}
-        >
-          <div className="absolute top-0 left-0 h-full bg-white rounded-full" style={{ width: `${progress}%` }}/>
-          <div className="absolute top-1/2 -translate-y-1/2 h-3 w-3 bg-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" style={{ left: `${progress}%`, transform: `translate(-${progress}%, -50%)` }}/>
-        </div>
-
-        <div className="flex items-center justify-between text-white">
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="text-white hover:bg-white/20" onClick={togglePlay}>
-              {isEnded ? <RotateCwIcon className="w-5 h-5" /> : isPlaying ? <PauseIcon className="w-5 h-5" /> : <PlayIcon className="w-5 h-5" />}
-            </Button>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" className="text-white hover:bg-white/20">
-                    <VolumeIcon className="w-5 h-5" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-32 bg-black/50 backdrop-blur-md border-white/20 p-2">
-                <Slider
-                  value={[isMuted ? 0 : volume * 100]}
-                  onValueChange={(val: number[]) => {
-                    const newVolume = val[0] / 100;
-                    if (videoRef.current) videoRef.current.volume = newVolume;
-                    setVolume(newVolume);
-                    setIsMuted(newVolume === 0);
-                    if (videoRef.current) videoRef.current.muted = newVolume === 0;
-                  }}
-                />
-              </PopoverContent>
-            </Popover>
-            <span className="text-xs font-mono">
-              {formatTime(currentTime)} / {formatTime(duration)}
-            </span>
+        <div className="absolute bottom-0 left-0 w-full h-24 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
+        <div className="relative z-10 px-4 pb-3">
+          <div
+            className="relative w-full h-1.5 bg-white/20 rounded-full cursor-pointer group mb-2"
+            onClick={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const x = e.clientX - rect.left;
+              handleSeek((x / rect.width) * 100);
+            }}
+          >
+            <div className="absolute top-0 left-0 h-full bg-white rounded-full" style={{ width: `${progress}%` }}/>
+            <div className="absolute top-1/2 h-3 w-3 bg-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" style={{ left: `${progress}%`, transform: `translate(-50%, -50%)` }}/>
           </div>
 
-          <div className="flex items-center gap-2">
-             <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" className="text-white hover:bg-white/20">
-                  <SettingsIcon className="w-5 h-5" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="bg-white/90 backdrop-blur-md border-gray-200 text-black w-40 p-2">
-                <div className="flex flex-col gap-1">
-                  <span className="text-xs font-medium text-gray-500 px-2">Speed</span>
-                  {[0.5, 1, 1.5, 2].map((s) => (
-                    <Button key={s} variant={playbackSpeed === s ? "ghost" : "ghost"} size="sm" className={cn("w-full justify-start text-xs text-black", playbackSpeed === s && "bg-gray-200 font-semibold")}
-                      onClick={() => {
-                        if (videoRef.current) videoRef.current.playbackRate = s;
-                        setPlaybackSpeed(s);
-                      }}
-                    >
-                      {s === 1 ? 'Normal' : `${s}x`}
-                    </Button>
-                  ))}
-                  <div className="h-px bg-gray-200 my-1"></div>
-                  <Button variant="ghost" size="sm" className="w-full justify-start text-xs text-black hover:bg-gray-200">Sync Audio</Button>
-                  <Button variant="ghost" size="sm" className="w-full justify-start text-xs text-black hover:bg-gray-200">Sync Video</Button>
-                </div>
-              </PopoverContent>
-            </Popover>
-            <Button variant="ghost" size="icon" className="text-white hover:bg-white/20" onClick={toggleFullscreen}>
-              <Maximize2Icon className="w-5 h-5" />
-            </Button>
+          <div className="flex items-center justify-between text-white gap-4">
+            <div className="flex flex-1 items-center gap-2 min-w-0">
+              <Button variant="ghost" size="icon" className="text-white hover:bg-white/20" onClick={() => handleStep('backward')}>
+                <SkipBackIcon className="w-5 h-5" />
+              </Button>
+              <Button variant="ghost" size="icon" className="text-white hover:bg-white/20" onClick={togglePlay}>
+                {isEnded ? <RotateCwIcon className="w-5 h-5" /> : isPlaying ? <PauseIcon className="w-5 h-5" /> : <PlayIcon className="w-5 h-5" />}
+              </Button>
+              <Button variant="ghost" size="icon" className="text-white hover:bg-white/20" onClick={() => handleStep('forward')}>
+                <SkipForwardIcon className="w-5 h-5" />
+              </Button>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="icon" className="text-white hover:bg-white/20">
+                      <VolumeIcon className="w-5 h-5" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-32 bg-black/50 backdrop-blur-md border-white/20 p-2">
+                  <Slider
+                    value={[isMuted ? 0 : volume * 100]}
+                    onValueChange={(val: number[]) => {
+                      const newVolume = val[0] / 100;
+                      if (videoRef.current) videoRef.current.volume = newVolume;
+                      setVolume(newVolume);
+                      setIsMuted(newVolume === 0);
+                      if (videoRef.current) videoRef.current.muted = newVolume === 0;
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
+              <span className="text-xs font-mono whitespace-nowrap overflow-hidden text-ellipsis">
+                {formatTime(currentTime)} (Frame: {currentFrame}) / {formatTime(duration)} (Total: {totalFrames})
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 flex-shrink-0">
+               <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="icon" className="text-white hover:bg-white/20">
+                    <SettingsIcon className="w-5 h-5" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="bg-white/90 backdrop-blur-md border-gray-200 text-black w-40 p-2 right-0">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs font-medium text-gray-500 px-2">Speed</span>
+                    {[0.5, 1, 1.5, 2].map((s) => (
+                      <Button key={s} variant={playbackSpeed === s ? "ghost" : "ghost"} size="sm" className={cn("w-full justify-start text-xs text-black", playbackSpeed === s && "bg-gray-200 font-semibold")}
+                        onClick={() => {
+                          if (videoRef.current) videoRef.current.playbackRate = s;
+                          setPlaybackSpeed(s);
+                        }}
+                      >
+                        {s === 1 ? 'Normal' : `${s}x`}
+                      </Button>
+                    ))}
+                    <div className="h-px bg-gray-200 my-1"></div>
+                    <Button variant="ghost" size="sm" className="w-full justify-start text-xs text-black hover:bg-gray-200">Sync Audio</Button>
+                    <Button variant="ghost" size="sm" className="w-full justify-start text-xs text-black hover:bg-gray-200">Sync Video</Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+              <Button variant="ghost" size="icon" className="text-white hover:bg-white/20" onClick={toggleFullscreen}>
+                {isFullscreen ? <Minimize2Icon className="w-5 h-5" /> : <Maximize2Icon className="w-5 h-5" />}
+              </Button>
+            </div>
           </div>
         </div>
       </div>

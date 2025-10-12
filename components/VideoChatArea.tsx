@@ -191,9 +191,13 @@ const VideoChatArea: React.FC = () => {
     return (
         <div className="flex-1 flex flex-col p-4 gap-4 min-w-0">
             {/* Video Players */}
-            <div className="flex-grow-[2] flex gap-4 min-h-0">
-                <VideoPlayerPro title="Upload a video to begin" src={videoSrc} />
-                <VideoPlayerPro title="Analysis Overlay" src={null} />
+            <div className="flex gap-4">
+                <div className="flex-1 aspect-video">
+                    <VideoPlayerPro title="Upload a video to begin" src={videoSrc} />
+                </div>
+                <div className="flex-1 aspect-video">
+                    <VideoPlayerPro title="Analysis Overlay" src={null} />
+                </div>
             </div>
 
             {/* Floating Messages Area */}
