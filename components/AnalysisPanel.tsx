@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { cn, formatTime } from '../lib/utils';
-import { SearchIcon, XIcon, VideoIcon, MicIcon, TagIcon } from './icons';
+import { SearchIcon, XIcon, VideoIcon, MicIcon, TagIcon, RotateCwIcon } from './icons';
 
 // --- TYPE DEFINITIONS ---
 export interface Scene {
@@ -26,6 +26,8 @@ interface AnalysisPanelProps {
     activeTimestamp: number | null;
     activeTab: string;
     onTabChange: (tab: string) => void;
+    isAnalyzing: boolean;
+    error: string | null;
 }
 
 const TabButton: React.FC<{ active: boolean; onClick: () => void; children: React.ReactNode; className?: string }> = ({ active, onClick, children, className }) => (
@@ -41,10 +43,41 @@ const TabButton: React.FC<{ active: boolean; onClick: () => void; children: Reac
     </button>
 );
 
-const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ rightPanelWidth, scenes, transcripts, objects, onTimestampClick, activeTimestamp, activeTab, onTabChange }) => {
+const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ rightPanelWidth, scenes, transcripts, objects, onTimestampClick, activeTimestamp, activeTab, onTabChange, isAnalyzing, error }) => {
     const [searchQuery, setSearchQuery] = useState('');
 
     const renderContent = () => {
+        if (isAnalyzing) {
+            return (
+                <div className="flex flex-col items-center justify-center h-full text-center text-gray-500 p-4">
+                    <RotateCwIcon className="w-6 h-6 animate-spin mb-3" />
+                    <p className="font-semibold">Analyzing video...</p>
+                    <p className="text-xs mt-1">This may take a few moments.</p>
+                </div>
+            );
+        }
+
+        if (error) {
+            return (
+                <div className="flex flex-col items-center justify-center h-full text-center text-red-600 p-4">
+                     <XIcon className="w-6 h-6 mb-3" />
+                    <p className="font-semibold">Analysis Failed</p>
+                    <p className="text-sm mt-1">{error}</p>
+                </div>
+            )
+        }
+        
+        const hasData = scenes.length > 0 || transcripts.length > 0 || objects.length > 0;
+        if (!hasData) {
+            return (
+                 <div className="flex flex-col items-center justify-center h-full text-center text-gray-500 p-4">
+                    <VideoIcon className="w-8 h-8 mb-3" />
+                    <p className="font-semibold">No analysis data</p>
+                    <p className="text-sm mt-1">Upload a video and click 'Analyze' to begin.</p>
+                </div>
+            )
+        }
+
         switch (activeTab) {
             case 'scene':
                 return (

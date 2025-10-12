@@ -1,65 +1,10 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import HistorySidebar from './components/HistorySidebar';
 import AnalysisPanel, { Scene, TranscriptItem, TrackedObject } from './components/AnalysisPanel';
-import VideoChatArea from './components/VideoChatArea';
+import VideoChatArea, { Message, UserMessage, ReasoningMessage, AssistantMessage } from './components/VideoChatArea';
 import { LogoIcon, UserIcon } from './components/icons';
-
-// --- MOCK DATA ---
-const MOCK_SCENES: Scene[] = [
-  { timestamp: 4, description: "Opening shot of the city skyline at dusk." },
-  { timestamp: 15, description: "Main character, Alex, introduced in a busy cafe, looking anxious." },
-  { timestamp: 45, description: "A mysterious package is left on Alex's table." },
-  { timestamp: 83, description: "Alex opens the package to find an old compass." },
-  { timestamp: 121, description: "Flashback sequence to a childhood memory on a sailboat." },
-  { timestamp: 245, description: "Alex solves the first clue, leading to a library." },
-  { timestamp: 291, description: "A final shot shows Alex looking hopeful." },
-];
-
-const MOCK_TRANSCRIPTS: TranscriptItem[] = [
-  { startTime: 15, endTime: 18, text: "I'll just have a black coffee, no sugar." },
-  { startTime: 22, endTime: 25, text: "Haven't seen you around here before." },
-  { startTime: 48, endTime: 51, text: "Excuse me, I think you dropped this." },
-  { startTime: 83, endTime: 87, text: "What is this? It looks ancient." },
-  { startTime: 248, endTime: 251, text: "Of course! The North Star... it has to be the library." },
-];
-
-const MOCK_OBJECTS: TrackedObject[] = [
-  { timestamp: 4, name: "Skyscraper" },
-  { timestamp: 16, name: "Coffee cup" },
-  { timestamp: 17, name: "Laptop" },
-  { timestamp: 45, name: "Brown Package" },
-  { timestamp: 84, name: "Antique Compass" },
-  { timestamp: 125, name: "Sailboat" },
-  { timestamp: 246, name: "Old Map" },
-];
-
-const findTabForTimestamp = (time: number, typeHint?: string): string | null => {
-    const defaultChecks = [
-        { tab: 'scene', check: () => MOCK_SCENES.some(s => s.timestamp === time) },
-        { tab: 'transcript', check: () => MOCK_TRANSCRIPTS.some(t => time >= t.startTime && time <= t.endTime) },
-        { tab: 'object', check: () => MOCK_OBJECTS.some(o => o.timestamp === time) },
-    ];
-
-    let orderedChecks = defaultChecks;
-
-    if (typeHint) {
-        const hintedCheck = defaultChecks.find(c => c.tab === typeHint);
-        if (hintedCheck) {
-            orderedChecks = [
-                hintedCheck,
-                ...defaultChecks.filter(c => c.tab !== typeHint)
-            ];
-        }
-    }
-    
-    for (const { tab, check } of orderedChecks) {
-        if (check()) {
-            return tab;
-        }
-    }
-    
-    return null;
-};
+import { analyzeVideo, generateChatResponseWithRAG } from './lib/gemini';
+import { getHistory, saveHistory, ChatSession } from './lib/history';
 
 
 const App: React.FC = () => {
@@ -68,78 +13,236 @@ const App: React.FC = () => {
     const [seekTime, setSeekTime] = useState<number | null>(null);
     const [activeTimestamp, setActiveTimestamp] = useState<number | null>(null);
     const [activeAnalysisTab, setActiveAnalysisTab] = useState('scene');
+    
+    // State for video and analysis
+    const [videoFile, setVideoFile] = useState<File | null>(null);
+    const [videoSrc, setVideoSrc] = useState<string | null>(null);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [analysisError, setAnalysisError] = useState<string | null>(null);
+    
+    // State for history and sessions
+    const [history, setHistory] = useState<ChatSession[]>([]);
+    const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
-    const toggleHistory = () => {
-        setIsHistoryOpen(prev => !prev);
+    // Derive current session data for rendering
+    const currentSession = history.find(session => session.id === currentSessionId);
+    const messages = currentSession?.messages || [];
+    const scenes = currentSession?.scenes || [];
+    const transcripts = currentSession?.transcripts || [];
+    const objects = currentSession?.objects || [];
+
+    // Load history from localStorage on initial mount
+    useEffect(() => {
+        const loadedHistory = getHistory();
+        setHistory(loadedHistory);
+        if (loadedHistory.length > 0) {
+            handleSelectSession(loadedHistory[0].id, loadedHistory);
+        }
+    }, []);
+
+    // Save history to localStorage whenever it changes
+    useEffect(() => {
+        if (history.length > 0) {
+            saveHistory(history);
+        }
+    }, [history]);
+
+    const handleSelectSession = (id: string, historySource?: ChatSession[]) => {
+        const sessions = historySource || history;
+        const sessionToLoad = sessions.find(s => s.id === id);
+        if (sessionToLoad) {
+            setCurrentSessionId(id);
+            setVideoSrc(null);
+            setVideoFile(null);
+            setAnalysisError(null);
+            setActiveTimestamp(sessionToLoad.lastTimestamp);
+            setSeekTime(sessionToLoad.lastTimestamp);
+        }
     };
 
+    const toggleHistory = () => setIsHistoryOpen(prev => !prev);
+
+    const findTabForTimestamp = useCallback((time: number, typeHint?: string): string | null => {
+        const checks = [
+            { tab: 'scene', data: scenes, check: (item: any) => item.timestamp === time },
+            { tab: 'transcript', data: transcripts, check: (item: any) => time >= item.startTime && time <= item.endTime },
+            { tab: 'object', data: objects, check: (item: any) => item.timestamp === time },
+        ];
+        if (typeHint) {
+            const hintedCheck = checks.find(c => c.tab === typeHint);
+            if (hintedCheck) {
+                 checks.unshift(hintedCheck);
+            }
+        }
+        return checks.find(c => c.data.some(c.check))?.tab || null;
+    }, [scenes, transcripts, objects]);
+
     const jumpToTimestamp = useCallback((time: number, typeHint?: string) => {
-        console.log(`Jumping to timestamp: ${time}s with hint: ${typeHint}`);
         setSeekTime(time);
         setActiveTimestamp(time);
         const targetTab = findTabForTimestamp(time, typeHint);
-        if (targetTab) {
-            setActiveAnalysisTab(targetTab);
-        }
-    }, []);
+        if (targetTab) setActiveAnalysisTab(targetTab);
+    }, [findTabForTimestamp]);
 
-    const handleSeeked = useCallback(() => {
-        setSeekTime(null);
-    }, []);
+    const handleSeeked = useCallback(() => setSeekTime(null), []);
 
     const handleVideoTimeUpdate = useCallback((time: number) => {
-        // Find active transcript
-        const activeTranscript = MOCK_TRANSCRIPTS.find(t => time >= t.startTime && time < t.endTime);
+        const activeTranscript = transcripts.find(t => time >= t.startTime && time < t.endTime);
         if (activeTranscript) {
             setActiveTimestamp(prev => (prev !== activeTranscript.startTime ? activeTranscript.startTime : prev));
-            return; // Prioritize transcript as it's most precise
+        } else {
+             const allEvents = [...scenes.map(s => s.timestamp), ...objects.map(o => o.timestamp)];
+             const lastEvent = allEvents.filter(t => t <= time).sort((a,b) => b-a)[0];
+             if (lastEvent !== undefined) setActiveTimestamp(prev => (prev !== lastEvent ? lastEvent : prev));
+        }
+       
+        // Update session timestamp throttled by time difference
+        if (currentSessionId && Math.abs(time - (currentSession?.lastTimestamp || 0)) > 1) {
+            setHistory(prev => prev.map(s => s.id === currentSessionId ? { ...s, lastTimestamp: time } : s));
+        }
+    }, [scenes, objects, transcripts, currentSessionId, currentSession?.lastTimestamp]);
+    
+    const handleVideoUpload = (file: File) => {
+        const newSession: ChatSession = {
+            id: Date.now().toString(),
+            name: file.name,
+            createdAt: new Date().toISOString(),
+            videoName: file.name,
+            messages: [],
+            scenes: [], transcripts: [], objects: [],
+            lastTimestamp: 0,
+        };
+        
+        setHistory(prev => [newSession, ...prev]);
+        setCurrentSessionId(newSession.id);
+        
+        if (videoSrc) URL.revokeObjectURL(videoSrc);
+        setVideoFile(file);
+        setVideoSrc(URL.createObjectURL(file));
+        setAnalysisError(null);
+        setActiveTimestamp(0);
+    };
+
+    const handleAnalyze = async () => {
+        if (!videoFile || !currentSessionId) {
+            setAnalysisError("Please select a video and session.");
+            return;
         }
 
-        // Find last active scene/object if no transcript is active
-        let lastEventTimestamp: number | null = null;
-        
-        const allEvents = [
-            ...MOCK_SCENES.map(s => s.timestamp),
-            ...MOCK_OBJECTS.map(o => o.timestamp)
-        ];
-
-        for (const eventTime of allEvents) {
-            if (eventTime <= time) {
-                if (lastEventTimestamp === null || eventTime > lastEventTimestamp) {
-                    lastEventTimestamp = eventTime;
-                }
+        const reasoningId = `reasoning-${Date.now()}`;
+        const reasoningMessage: ReasoningMessage = {
+            id: reasoningId,
+            role: 'reasoning',
+            content: {
+                duration: 0,
+                steps: [
+                    "Initializing video analysis pipeline.",
+                    "Extracting representative frames from the video stream.",
+                    "Processing visual data for scene detection and object recognition.",
+                    "Analyzing audio track for transcription.",
+                    "Compiling and structuring the final analysis data.",
+                ]
             }
-        }
+        };
         
-        if (lastEventTimestamp !== null) {
-            setActiveTimestamp(prev => (prev !== lastEventTimestamp ? lastEventTimestamp : prev));
+        setHistory(prev => prev.map(s => s.id === currentSessionId ? { ...s, messages: [...s.messages, reasoningMessage] } : s));
+        setIsAnalyzing(true);
+        setAnalysisError(null);
+
+        try {
+            const result = await analyzeVideo(videoFile);
+            const summaryText = `I've finished analyzing the video. I identified ${result.scenes.length} distinct scenes, ${result.transcripts.length} transcript entries, and found ${result.objects.length} unique objects. You can now explore the details in the panel on the right or ask me specific questions about the content.`;
+            const assistantMessage: AssistantMessage = {
+                id: `assistant-${Date.now()}`,
+                role: 'assistant',
+                content: { text: summaryText }
+            };
+            
+            setHistory(prev => prev.map(s => s.id === currentSessionId ? { ...s, ...result, messages: [...s.messages.filter(m => m.id !== reasoningId), assistantMessage] } : s));
+        } catch (error: any) {
+            console.error("Video analysis failed:", error);
+            const errorMessage = error.message || "Failed to analyze video.";
+            setAnalysisError(errorMessage);
+            
+            const errorAssistantMessage: AssistantMessage = {
+                id: `assistant-error-${Date.now()}`,
+                role: 'assistant',
+                content: { text: `I'm sorry, but I encountered an error during the analysis: "${errorMessage}". Please check the video file or try again.` }
+            };
+            setHistory(prev => prev.map(s => s.id === currentSessionId ? { ...s, messages: [...s.messages.filter(m => m.id !== reasoningId), errorAssistantMessage] } : s));
+        } finally {
+            setIsAnalyzing(false);
         }
-    }, []);
+    };
+    
+    const handleSendMessage = async (content: string) => {
+        if (!currentSessionId || !currentSession) return;
+        const userMessage: UserMessage = { id: `user-${Date.now()}`, role: 'user', content };
+    
+        setHistory(prev => prev.map(s => s.id === currentSessionId ? { ...s, messages: [...s.messages, userMessage] } : s));
+
+        const reasoningId = `reasoning-${Date.now()}`;
+        const reasoningMessage: ReasoningMessage = {
+            id: reasoningId,
+            role: 'reasoning',
+            content: {
+                duration: 0,
+                steps: [
+                    "Interpreting user query for tool use.",
+                    "Calling video search tool with relevant query.",
+                    "Retrieving context from video analysis data.",
+                    "Generating final response based on retrieved context.",
+                ]
+            }
+        };
+        setHistory(prev => prev.map(s => s.id === currentSessionId ? { ...s, messages: [...s.messages, reasoningMessage] } : s));
+    
+        try {
+            const context = {
+                scenes: currentSession.scenes,
+                transcripts: currentSession.transcripts,
+                objects: currentSession.objects,
+            };
+    
+            const assistantText = await generateChatResponseWithRAG(content, context);
+    
+            const assistantMessage: AssistantMessage = {
+                id: `assistant-${Date.now()}`,
+                role: 'assistant',
+                content: { text: assistantText }
+            };
+            
+            setHistory(prev => prev.map(s => s.id === currentSessionId ? { ...s, messages: [...s.messages.filter(m => m.id !== reasoningId), assistantMessage] } : s));
+    
+        } catch (error: any) {
+            console.error("Chat response failed:", error);
+            const errorMessage = error.message || "Failed to get a response.";
+            const errorAssistantMessage: AssistantMessage = {
+                id: `assistant-error-${Date.now()}`,
+                role: 'assistant',
+                content: { text: `Sorry, I encountered an error: "${errorMessage}". Please try again.` }
+            };
+            setHistory(prev => prev.map(s => s.id === currentSessionId ? { ...s, messages: [...s.messages.filter(m => m.id !== reasoningId), errorAssistantMessage] } : s));
+        }
+    };
 
     const handleMouseDown = useCallback((e: React.MouseEvent) => {
         e.preventDefault();
         document.body.style.cursor = 'col-resize';
-
         const startWidth = rightPanelWidth;
         const startPosition = e.clientX;
-
         const handleMouseMove = (moveEvent: MouseEvent) => {
             const newWidth = startWidth - (moveEvent.clientX - startPosition);
-            if (newWidth > 300 && newWidth < 800) { // Min and max width constraints
-                setRightPanelWidth(newWidth);
-            }
+            if (newWidth > 300 && newWidth < 800) setRightPanelWidth(newWidth);
         };
-
         const handleMouseUp = () => {
             document.body.style.cursor = 'default';
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
         };
-        
         window.addEventListener('mousemove', handleMouseMove);
         window.addEventListener('mouseup', handleMouseUp);
     }, [rightPanelWidth]);
-
 
     return (
         <div className="h-screen w-screen bg-gray-50 flex flex-col">
@@ -152,16 +255,28 @@ const App: React.FC = () => {
                 </button>
             </header>
             <div className="flex flex-1 overflow-hidden">
-                <HistorySidebar isHistoryOpen={isHistoryOpen} toggleHistory={toggleHistory} />
+                <HistorySidebar 
+                    isHistoryOpen={isHistoryOpen} 
+                    toggleHistory={toggleHistory}
+                    sessions={history}
+                    activeSessionId={currentSessionId}
+                    onSelectSession={handleSelectSession}
+                />
                 
                 <VideoChatArea 
                     jumpToTimestamp={jumpToTimestamp}
                     seekTime={seekTime}
                     onSeeked={handleSeeked}
-                    scenes={MOCK_SCENES}
-                    transcripts={MOCK_TRANSCRIPTS}
-                    objects={MOCK_OBJECTS}
+                    scenes={scenes}
+                    transcripts={transcripts}
+                    objects={objects}
                     onTimeUpdate={handleVideoTimeUpdate}
+                    videoSrc={videoSrc}
+                    onVideoUpload={handleVideoUpload}
+                    onAnalyze={handleAnalyze}
+                    isAnalyzing={isAnalyzing}
+                    messages={messages}
+                    onSendMessage={handleSendMessage}
                 />
 
                 <div
@@ -172,13 +287,15 @@ const App: React.FC = () => {
 
                 <AnalysisPanel 
                     rightPanelWidth={rightPanelWidth} 
-                    scenes={MOCK_SCENES}
-                    transcripts={MOCK_TRANSCRIPTS}
-                    objects={MOCK_OBJECTS}
+                    scenes={scenes}
+                    transcripts={transcripts}
+                    objects={objects}
                     onTimestampClick={jumpToTimestamp}
                     activeTimestamp={activeTimestamp}
                     activeTab={activeAnalysisTab}
                     onTabChange={setActiveAnalysisTab}
+                    isAnalyzing={isAnalyzing}
+                    error={analysisError}
                 />
             </div>
         </div>

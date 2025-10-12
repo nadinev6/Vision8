@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { cn } from '../lib/utils';
 import { AssistantIcon, UserIcon } from './icons';
 import AIChatInput from './AIChatInput';
@@ -10,13 +10,13 @@ import { Popover, PopoverTrigger, PopoverContent } from './ui/popover';
 
 
 // --- TYPE DEFINITIONS ---
-type UserMessage = {
+export type UserMessage = {
   id: string;
   role: 'user';
   content: string;
 }
 
-type ReasoningMessageContent = {
+export type ReasoningMessageContent = {
     duration: number;
     steps: string[];
 }
@@ -27,56 +27,24 @@ export type ReasoningMessage = {
     content: ReasoningMessageContent;
 }
 
-type AssistantMessageContent = {
+export type AssistantMessageContent = {
   text: string;
 }
 
-type AssistantMessage = {
+export type AssistantMessage = {
   id: string;
   role: 'assistant';
   content: AssistantMessageContent;
 }
 
-type Message = UserMessage | ReasoningMessage | AssistantMessage;
-
-// --- MOCK DATA ---
-const initialMessages: Message[] = [
-    {
-        id: '1',
-        role: 'user',
-        content: "Can you analyze this quarterly report video for key financial moments?",
-    },
-    {
-        id: '2',
-        role: 'reasoning',
-        content: {
-            duration: 4,
-            steps: [
-                "Let me think about this problem step by step.",
-                "First, I need to understand what the user is asking for. They want me to identify key financial moments in the video.",
-                "I will approach this by analyzing the audio for keywords related to finance, transcribing the audio, and correlating those transcripts with visual cues like charts or graphs.",
-                "This seems like a robust approach to fulfill the user's request.",
-                "Okay, first I need to understand what HextaUI is. It seems to be a UI library or framework, likely for web development. I should check the web results for any mentions of HextaUI.",
-                "Looking at the web results, I see that HextaUI is mentioned in several contexts. It's described as a collection of modern, responsive, and customizable UI components for Next.js. It seems to be designed to help developers build websites more efficiently.",
-                "I should look for more specific details. The results mention that HextaUI provides components that can be copied, adapted, and personalized. It also mentions that it's open-source and has a community of contributors."
-            ],
-        }
-    },
-    {
-        id: '3',
-        role: 'assistant',
-        content: {
-            text: 'Based on the analysis, the key moment appears at [01:23] where the presenter discusses Q3 revenue projections. The overall sentiment is positive, especially noted during the summary at [04:51]. A key object to note is the [Antique Compass] at [01:24].',
-        }
-    }
-];
+export type Message = UserMessage | ReasoningMessage | AssistantMessage;
 
 // --- CHILD COMPONENTS ---
 
 const CitationPopoverContent: React.FC<{
     analysisItems: { type: string; data: Scene | TranscriptItem | TrackedObject }[];
 }> = ({ analysisItems }) => {
-    const [activeTab, setActiveTab] = useState(analysisItems[0]?.type || null);
+    const [activeTab, setActiveTab] = React.useState(analysisItems[0]?.type || null);
 
     if (!activeTab) return null;
 
@@ -239,16 +207,15 @@ interface VideoChatAreaProps {
     transcripts: TranscriptItem[];
     objects: TrackedObject[];
     onTimeUpdate: (time: number) => void;
+    videoSrc: string | null;
+    onVideoUpload: (file: File) => void;
+    onAnalyze: () => void;
+    isAnalyzing: boolean;
+    messages: Message[];
+    onSendMessage: (content: string) => void;
 }
 
-const VideoChatArea: React.FC<VideoChatAreaProps> = ({ jumpToTimestamp, seekTime, onSeeked, scenes, transcripts, objects, onTimeUpdate }) => {
-    const [messages, setMessages] = useState<Message[]>(initialMessages);
-    const [videoSrc, setVideoSrc] = useState<string | null>(null);
-
-    const handleVideoUpload = (url: string) => {
-        setVideoSrc(url);
-    };
-
+const VideoChatArea: React.FC<VideoChatAreaProps> = ({ jumpToTimestamp, seekTime, onSeeked, scenes, transcripts, objects, onTimeUpdate, videoSrc, onVideoUpload, onAnalyze, isAnalyzing, messages, onSendMessage }) => {
     return (
         <div className="flex-1 flex flex-col p-4 gap-4 min-w-0">
             {/* Video Players */}
@@ -310,7 +277,13 @@ const VideoChatArea: React.FC<VideoChatAreaProps> = ({ jumpToTimestamp, seekTime
                     })}
                 </div>
                 <div className="p-3 flex justify-center">
-                    <AIChatInput onVideoUpload={handleVideoUpload} />
+                    <AIChatInput
+                        onVideoUpload={onVideoUpload}
+                        onAnalyze={onAnalyze}
+                        isAnalyzing={isAnalyzing}
+                        isVideoLoaded={!!videoSrc}
+                        onSendMessage={onSendMessage}
+                    />
                 </div>
             </div>
         </div>

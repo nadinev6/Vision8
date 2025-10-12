@@ -1,21 +1,18 @@
 import React from 'react';
-import { cn, formatDate, HistoryItem } from '../lib/utils';
+import { cn, formatDate } from '../lib/utils';
 import { HistoryIcon, ChevronLeftIcon, ChevronRightIcon, VideoIcon } from './icons';
+import { ChatSession } from '../lib/history';
 
-const mockHistoryItems: HistoryItem[] = [
-    { id: 1, name: "Market Analysis Q3", createdAt: "2023-10-26T10:00:00Z" },
-    { id: 2, name: "User Interview #12", createdAt: "2023-10-25T14:30:00Z" },
-    { id: 3, name: "Prototype Walkthrough", createdAt: "2023-10-24T09:15:00Z" },
-];
 
 interface HistorySidebarProps {
     isHistoryOpen: boolean;
     toggleHistory: () => void;
+    sessions: ChatSession[];
+    activeSessionId: string | null;
+    onSelectSession: (id: string) => void;
 }
 
-const HistorySidebar: React.FC<HistorySidebarProps> = ({ isHistoryOpen, toggleHistory }) => {
-    const [selectedId, setSelectedId] = React.useState<number | null>(1);
-
+const HistorySidebar: React.FC<HistorySidebarProps> = ({ isHistoryOpen, toggleHistory, sessions, activeSessionId, onSelectSession }) => {
     return (
         <aside className={cn(
             "bg-white border-r border-gray-200 flex flex-col transition-all duration-300 ease-in-out relative flex-shrink-0",
@@ -49,27 +46,27 @@ const HistorySidebar: React.FC<HistorySidebarProps> = ({ isHistoryOpen, toggleHi
             )}
 
             <div className="flex-grow p-2 space-y-1 overflow-y-auto">
-                {mockHistoryItems.map((item) => (
+                {sessions.map((session) => (
                     <button
-                        key={item.id}
-                        onClick={() => setSelectedId(item.id)}
-                        title={item.name}
+                        key={session.id}
+                        onClick={() => onSelectSession(session.id)}
+                        title={session.name}
                         className={cn(
                             "w-full flex items-center gap-3 p-2 rounded-md text-left transition-colors",
-                            item.id === selectedId
+                            session.id === activeSessionId
                                 ? "bg-blue-100 text-blue-800"
                                 : "text-gray-700 hover:bg-gray-100",
                             !isHistoryOpen && "justify-center"
                         )}
                     >
-                        <VideoIcon className={cn("w-5 h-5 flex-shrink-0", item.id === selectedId ? "text-blue-600" : "text-gray-500")} />
+                        <VideoIcon className={cn("w-5 h-5 flex-shrink-0", session.id === activeSessionId ? "text-blue-600" : "text-gray-500")} />
                         {isHistoryOpen && (
                             <div className="flex-1 overflow-hidden">
-                                <p className="text-sm font-medium truncate">{item.name}</p>
+                                <p className="text-sm font-medium truncate">{session.name}</p>
                                 <p className={cn(
                                     "text-xs truncate",
-                                    item.id === selectedId ? "text-blue-600" : "text-gray-500"
-                                )}>{formatDate(item.createdAt)}</p>
+                                    session.id === activeSessionId ? "text-blue-600" : "text-gray-500"
+                                )}>{formatDate(session.createdAt)}</p>
                             </div>
                         )}
                     </button>

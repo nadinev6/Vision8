@@ -112,6 +112,13 @@ const VideoPlayerPro: React.FC<VideoPlayerProProps> = ({ src, title, seekToTime,
     }
   };
 
+  const handleMetadataLoaded = () => {
+    if (videoRef.current) {
+        videoRef.current.playbackRate = playbackSpeed;
+    }
+    handleTimeUpdate();
+  };
+
   const handleEnded = () => {
     setIsEnded(true);
     setIsPlaying(false);
@@ -183,7 +190,7 @@ const VideoPlayerPro: React.FC<VideoPlayerProProps> = ({ src, title, seekToTime,
             src={src}
             onTimeUpdate={handleTimeUpdate}
             onEnded={handleEnded}
-            onLoadedMetadata={handleTimeUpdate}
+            onLoadedMetadata={handleMetadataLoaded}
             onClick={togglePlay}
          />
       ) : (

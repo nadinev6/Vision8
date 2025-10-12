@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { LightbulbIcon as Lightbulb, MicIcon as Mic, VideoSearchIcon, VideoIcon, SendIcon as Send } from './icons';
+import { LightbulbIcon as Lightbulb, MicIcon as Mic, VideoSearchIcon, VideoIcon, SendIcon as Send, RotateCwIcon } from './icons';
 import { cn } from '../lib/utils';
 
 const PLACEHOLDERS = [
@@ -12,20 +12,22 @@ const PLACEHOLDERS = [
 ];
 
 interface AIChatInputProps {
-  onVideoUpload: (url: string) => void;
+  onVideoUpload: (file: File) => void;
+  onAnalyze: () => void;
+  isAnalyzing: boolean;
+  isVideoLoaded: boolean;
+  onSendMessage: (message: string) => void;
 }
 
-const AIChatInput: React.FC<AIChatInputProps> = ({ onVideoUpload }) => {
+const AIChatInput: React.FC<AIChatInputProps> = ({ onVideoUpload, onAnalyze, isAnalyzing, isVideoLoaded, onSendMessage }) => {
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [showPlaceholder, setShowPlaceholder] = useState(true);
   const [isActive, setIsActive] = useState(false);
-  const [analyzeActive, setAnalyzeActive] = useState(false);
   const [videoSearchActive, setVideoSearchActive] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const wrapperRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Cycle placeholder text when input is inactive
   useEffect(() => {
     if (isActive || inputValue) return;
 
@@ -40,7 +42,6 @@ const AIChatInput: React.FC<AIChatInputProps> = ({ onVideoUpload }) => {
     return () => clearInterval(interval);
   }, [isActive, inputValue]);
 
-  // Close input when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -64,10 +65,21 @@ const AIChatInput: React.FC<AIChatInputProps> = ({ onVideoUpload }) => {
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file && file.type.startsWith('video/')) {
-      const videoUrl = URL.createObjectURL(file);
-      onVideoUpload(videoUrl);
-      // Reset file input to allow uploading the same file again
+      onVideoUpload(file);
       event.target.value = '';
+    }
+  };
+
+  const handleSend = () => {
+    if (inputValue.trim()) {
+      onSendMessage(inputValue.trim());
+      setInputValue("");
+    }
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      handleSend();
     }
   };
   
@@ -83,7 +95,6 @@ const AIChatInput: React.FC<AIChatInputProps> = ({ onVideoUpload }) => {
         onClick={handleActivate}
       >
         <div className="flex flex-col items-stretch w-full h-full">
-          {/* Input Row */}
           <div className="flex items-center gap-2 p-3 rounded-full bg-white max-w-3xl w-full">
             <input
               type="file"
@@ -101,12 +112,12 @@ const AIChatInput: React.FC<AIChatInputProps> = ({ onVideoUpload }) => {
               <VideoIcon size={20} />
             </button>
 
-            {/* Text Input & Placeholder */}
             <div className="relative flex-1">
               <input
                 type="text"
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={handleKeyDown}
                 className="flex-1 border-0 outline-0 rounded-md py-2 text-base bg-transparent w-full font-normal relative z-10 focus:ring-0"
                 onFocus={handleActivate}
               />
@@ -129,12 +140,12 @@ const AIChatInput: React.FC<AIChatInputProps> = ({ onVideoUpload }) => {
               className="flex items-center gap-1 bg-black hover:bg-zinc-700 text-white p-3 rounded-full font-medium justify-center"
               title="Send"
               type="button"
+              onClick={handleSend}
             >
               <Send size={18} />
             </button>
           </div>
 
-          {/* Expanded Controls */}
           <div
             className={cn(
                 "w-full flex justify-start px-4 items-center text-sm transition-all duration-350 ease-out",
@@ -143,28 +154,34 @@ const AIChatInput: React.FC<AIChatInputProps> = ({ onVideoUpload }) => {
             style={{ marginTop: 8 }}
           >
             <div className="flex gap-3 items-center">
-              {/* Analyze Toggle */}
               <button
-                className={cn(`flex items-center gap-1 px-4 py-2 rounded-full transition-all font-medium group`,
-                  analyzeActive
-                    ? "bg-gray-200 text-gray-800 font-semibold"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                className={cn(`flex items-center gap-2 px-4 py-2 rounded-full transition-all font-medium group disabled:opacity-60 disabled:cursor-not-allowed`,
+                  "bg-gray-100 text-gray-700 hover:bg-gray-200"
                 )}
-                title="Analyze"
+                title="Analyze Video"
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setAnalyzeActive((a) => !a);
+                  onAnalyze();
                 }}
+                disabled={isAnalyzing || !isVideoLoaded}
               >
-                <Lightbulb
-                  className="group-hover:fill-yellow-300 transition-all"
-                  size={18}
-                />
-                Analyze
+                {isAnalyzing ? (
+                  <>
+                    <RotateCwIcon className="animate-spin" size={18} />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <Lightbulb
+                      className="group-hover:fill-yellow-300 transition-all"
+                      size={18}
+                    />
+                    Analyze
+                  </>
+                )}
               </button>
 
-              {/* Video Search Toggle */}
               <button
                 className={cn(`flex items-center gap-1 py-2 rounded-full transition-all duration-300 font-medium whitespace-nowrap overflow-hidden`,
                   videoSearchActive
