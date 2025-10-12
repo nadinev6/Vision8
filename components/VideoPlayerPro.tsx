@@ -3,11 +3,14 @@ import { Button } from "./ui/button";
 import { Popover, PopoverTrigger, PopoverContent } from "./ui/popover";
 import { Slider } from "./ui/slider";
 import { PlayIcon, PauseIcon, Volume2Icon, Volume1Icon, VolumeXIcon, Maximize2Icon, Minimize2Icon, RotateCwIcon, SettingsIcon, SkipBackIcon, SkipForwardIcon } from "./icons";
-import { cn } from "../lib/utils";
+import { cn, formatTime } from "../lib/utils";
 
 interface VideoPlayerProProps {
   src: string | null;
   title: string;
+  seekToTime?: number | null;
+  onSeeked?: () => void;
+  onTimeUpdate?: (time: number) => void;
 }
 
 // Interfaces for cross-browser fullscreen support
@@ -26,17 +29,10 @@ interface FullscreenableDocument extends Document {
   msFullscreenElement?: Element | null;
 }
 
-const formatTime = (seconds: number) => {
-  if (isNaN(seconds) || seconds < 0) return "0:00";
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
-};
-
 const FRAME_RATE = 30; // Assuming 30 FPS
 const FRAME_STEP = 1 / FRAME_RATE;
 
-const VideoPlayerPro: React.FC<VideoPlayerProProps> = ({ src, title }) => {
+const VideoPlayerPro: React.FC<VideoPlayerProProps> = ({ src, title, seekToTime, onSeeked, onTimeUpdate }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -51,6 +47,15 @@ const VideoPlayerPro: React.FC<VideoPlayerProProps> = ({ src, title }) => {
   const [currentFrame, setCurrentFrame] = useState<number>(0);
   const [totalFrames, setTotalFrames] = useState<number>(0);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (seekToTime !== null && seekToTime !== undefined && videoRef.current) {
+        videoRef.current.currentTime = seekToTime;
+        if (onSeeked) {
+            onSeeked();
+        }
+    }
+  }, [seekToTime, onSeeked]);
 
   useEffect(() => {
     // Reset state when src changes
@@ -101,6 +106,9 @@ const VideoPlayerPro: React.FC<VideoPlayerProProps> = ({ src, title }) => {
     if (videoRef.current.duration) {
       setDuration(videoRef.current.duration);
       setTotalFrames(Math.floor(videoRef.current.duration * FRAME_RATE));
+    }
+    if (onTimeUpdate) {
+        onTimeUpdate(videoRef.current.currentTime);
     }
   };
 

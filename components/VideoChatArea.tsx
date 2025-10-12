@@ -4,21 +4,16 @@ import { AssistantIcon, UserIcon } from './icons';
 import AIChatInput from './AIChatInput';
 import VideoPlayerPro from './VideoPlayerPro';
 import AIThinkingBlock from './AIThinkingBlock';
+import { Button } from './ui/button';
+import { Scene, TranscriptItem, TrackedObject } from './AnalysisPanel';
+import { Popover, PopoverTrigger, PopoverContent } from './ui/popover';
+
 
 // --- TYPE DEFINITIONS ---
 type UserMessage = {
   id: string;
   role: 'user';
   content: string;
-}
-
-type CitationReference = {
-    id: number;
-    type: 'scene' | 'transcription' | 'object';
-    title: string;
-    timestamp: string;
-    description: string;
-    originalIndex: number;
 }
 
 type ReasoningMessageContent = {
@@ -34,7 +29,6 @@ export type ReasoningMessage = {
 
 type AssistantMessageContent = {
   text: string;
-  references?: CitationReference[];
 }
 
 type AssistantMessage = {
@@ -72,75 +66,140 @@ const initialMessages: Message[] = [
         id: '3',
         role: 'assistant',
         content: {
-            text: 'Based on the analysis, the key moment appears at 01:23 where the presenter discusses Q3 revenue projections [1]. The overall sentiment is positive, especially noted during the summary at 04:51 [2].',
-            references: [
-                { id: 1, type: 'scene', title: "Q3 Revenue Projections", timestamp: "01:23", description: "Presenter discusses upward trend in Q3 revenue.", originalIndex: 5 },
-                { id: 2, type: 'transcription', title: "Positive Sentiment", timestamp: "04:51", description: "Transcript mentions 'significant growth' and 'optimistic outlook'.", originalIndex: 12 },
-            ],
+            text: 'Based on the analysis, the key moment appears at [01:23] where the presenter discusses Q3 revenue projections. The overall sentiment is positive, especially noted during the summary at [04:51]. A key object to note is the [Antique Compass] at [01:24].',
         }
     }
 ];
 
 // --- CHILD COMPONENTS ---
 
-const InlineCitation: React.FC<{ reference: CitationReference, onReferenceClick: (ref: CitationReference) => void }> = ({ reference, onReferenceClick }) => {
-    const [isOpen, setIsOpen] = useState(false);
+const CitationPopoverContent: React.FC<{
+    analysisItems: { type: string; data: Scene | TranscriptItem | TrackedObject }[];
+}> = ({ analysisItems }) => {
+    const [activeTab, setActiveTab] = useState(analysisItems[0]?.type || null);
+
+    if (!activeTab) return null;
+
+    const activeItem = analysisItems.find(item => item.type === activeTab);
+
+    const renderContent = () => {
+        if (!activeItem) return null;
+        switch (activeItem.type) {
+            case 'Scene':
+                return <p className="text-gray-600">{(activeItem.data as Scene).description}</p>;
+            case 'Transcript':
+                return <p className="text-gray-600">{(activeItem.data as TranscriptItem).text}</p>;
+            case 'Object':
+                return <p className="text-gray-600">{(activeItem.data as TrackedObject).name}</p>;
+            default:
+                return null;
+        }
+    };
 
     return (
-        <div 
-            className="relative inline-block"
-            onMouseEnter={() => setIsOpen(true)}
-            onMouseLeave={() => setIsOpen(false)}
-        >
-            <button
-                onClick={() => onReferenceClick(reference)}
-                className="relative -top-0.5 inline-flex items-center justify-center h-4 w-4 rounded-full bg-blue-100 text-center text-xs font-bold text-blue-700 ring-1 ring-white transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                title={`View reference ${reference.id}`}
-            >
-                {reference.id}
-            </button>
-            {isOpen && (
-                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs z-20">
-                     <div className="w-full rounded-lg border bg-white p-3 shadow-lg ring-1 ring-black ring-opacity-5">
-                        <div className="w-full text-left">
-                            <p className="text-sm font-bold capitalize">{reference.type}: {reference.title}</p>
-                            <p className="text-xs text-gray-500 font-mono">Timestamp: {reference.timestamp}</p>
-                            <p className="mt-1 text-sm text-gray-600">
-                                {reference.description}
-                            </p>
-                        </div>
-                     </div>
-                 </div>
-            )}
+        <div className="flex flex-col gap-2">
+            <div className="flex border-b border-gray-200">
+                {analysisItems.map(item => (
+                    <button
+                        key={item.type}
+                        onClick={() => setActiveTab(item.type)}
+                        className={cn(
+                            'px-3 py-1 text-xs font-medium -mb-px border-b-2 focus:outline-none',
+                            activeTab === item.type
+                                ? 'border-blue-500 text-blue-600'
+                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        )}
+                    >
+                        {item.type}
+                    </button>
+                ))}
+            </div>
+            <div className="p-1 min-h-[40px]">
+                {renderContent()}
+            </div>
         </div>
-    )
+    );
 };
 
 
-const AIMessage: React.FC<{ content: AssistantMessageContent, onReferenceClick: (ref: CitationReference) => void }> = ({ content, onReferenceClick }) => {
+const AIMessage: React.FC<{
+  content: AssistantMessageContent,
+  onTimestampClick: (time: number, typeHint?: string) => void,
+  scenes: Scene[],
+  transcripts: TranscriptItem[],
+  objects: TrackedObject[]
+}> = ({ content, onTimestampClick, scenes, transcripts, objects }) => {
     
+    const findAllAnalysisItems = (time: number) => {
+        const items: { type: string; data: Scene | TranscriptItem | TrackedObject }[] = [];
+        
+        const scene = scenes.find(s => s.timestamp === time);
+        if (scene) items.push({ type: 'Scene', data: scene });
+
+        const transcript = transcripts.find(t => time >= t.startTime && time <= t.endTime);
+        if (transcript) items.push({ type: 'Transcript', data: transcript });
+
+        const object = objects.find(o => o.timestamp === time);
+        if (object) items.push({ type: 'Object', data: object });
+
+        return items;
+    };
+
     const parsedContent = useMemo(() => {
         if (!content.text) return null;
 
-        const parts = content.text.split(/(\[\d+\])/g);
-        return parts.map((part, index) => {
-            const match = part.match(/\[(\d+)\]/);
-            if (match) {
-                const citationNumber = parseInt(match[1], 10);
-                const reference = content.references?.find(ref => ref.id === citationNumber);
-                if (reference) {
-                    return (
-                        <InlineCitation
-                            key={index}
-                            reference={reference}
-                            onReferenceClick={onReferenceClick}
-                        />
-                    );
-                }
+        const parts = content.text.split(/(\[\d{1,2}:\d{2}\]|\[\w+\s?\w*\]\s?at\s?\[\d{1,2}:\d{2}\])/g);
+        const fullTimestampRegex = /\[(\w+\s?\w*)\]\s?at\s?\[(\d{1,2}:\d{2})\]/; // e.g., [Antique Compass] at [01:24]
+        const simpleTimestampRegex = /^\[(\d{1,2}:\d{2})\]$/; // e.g., [01:23]
+
+        const parseTimestampString = (ts: string): number => {
+            const [minutes, seconds] = ts.split(':').map(Number);
+            return (minutes || 0) * 60 + (seconds || 0);
+        };
+        
+        return parts.filter(Boolean).map((part, index) => {
+            let timeInSeconds: number | null = null;
+            let displayPart = part;
+            let typeHint: string | undefined = undefined;
+
+            const fullMatch = part.match(fullTimestampRegex);
+            const simpleMatch = part.match(simpleTimestampRegex);
+
+            if (fullMatch) {
+                timeInSeconds = parseTimestampString(fullMatch[2]);
+                displayPart = `[${fullMatch[1]}]`;
+                typeHint = 'object';
+            } else if (simpleMatch) {
+                timeInSeconds = parseTimestampString(simpleMatch[1]);
+                displayPart = `[${simpleMatch[1]}]`;
             }
-            return <React.Fragment key={index}>{part.replace(/\[\d+\]/g, '')}</React.Fragment>;
+
+            if (timeInSeconds !== null) {
+                const analysisItems = findAllAnalysisItems(timeInSeconds);
+                const finalTime = timeInSeconds;
+                
+                return (
+                    <Popover key={index}>
+                        <PopoverTrigger asChild>
+                             <Button
+                                variant="outline"
+                                onClick={() => onTimestampClick(finalTime, typeHint)}
+                                className="inline-block h-auto align-baseline py-0.5 px-1.5 rounded-md text-sm font-mono border-blue-300 bg-blue-100 text-blue-800 hover:bg-blue-200 hover:text-blue-900"
+                            >
+                                {displayPart}
+                            </Button>
+                        </PopoverTrigger>
+                        {analysisItems.length > 0 && (
+                            <PopoverContent className="w-64 text-sm p-2 bg-white shadow-lg rounded-lg border z-20">
+                                <CitationPopoverContent analysisItems={analysisItems} />
+                            </PopoverContent>
+                        )}
+                    </Popover>
+                );
+            }
+            return <React.Fragment key={index}>{part.replace(fullTimestampRegex, '')}</React.Fragment>;
         });
-    }, [content.text, content.references, onReferenceClick]);
+    }, [content.text, onTimestampClick, scenes, transcripts, objects]);
 
 
     return (
@@ -172,20 +231,22 @@ const UserMessageBubble: React.FC<{ content: string }> = ({ content }) => {
 
 // --- MAIN COMPONENT ---
 
-const VideoChatArea: React.FC = () => {
+interface VideoChatAreaProps {
+    jumpToTimestamp: (time: number, typeHint?: string) => void;
+    seekTime: number | null;
+    onSeeked: () => void;
+    scenes: Scene[];
+    transcripts: TranscriptItem[];
+    objects: TrackedObject[];
+    onTimeUpdate: (time: number) => void;
+}
+
+const VideoChatArea: React.FC<VideoChatAreaProps> = ({ jumpToTimestamp, seekTime, onSeeked, scenes, transcripts, objects, onTimeUpdate }) => {
     const [messages, setMessages] = useState<Message[]>(initialMessages);
     const [videoSrc, setVideoSrc] = useState<string | null>(null);
 
     const handleVideoUpload = (url: string) => {
         setVideoSrc(url);
-    };
-    
-    const handleReferenceClick = (ref: CitationReference) => {
-        // This is a placeholder for the actual implementation
-        // In a real app, this would likely involve updating global state
-        // to switch the tab and highlight the item in the AnalysisPanel.
-        console.log(`Hyperlinking to ${ref.type} at index ${ref.originalIndex}`);
-        alert(`Navigating to ${ref.type}: "${ref.title}" at ${ref.timestamp}`);
     };
 
     return (
@@ -193,7 +254,13 @@ const VideoChatArea: React.FC = () => {
             {/* Video Players */}
             <div className="flex gap-4">
                 <div className="flex-1 aspect-video">
-                    <VideoPlayerPro title="Upload a video to begin" src={videoSrc} />
+                    <VideoPlayerPro 
+                        title="Upload a video to begin" 
+                        src={videoSrc}
+                        seekToTime={seekTime}
+                        onSeeked={onSeeked}
+                        onTimeUpdate={onTimeUpdate}
+                    />
                 </div>
                 <div className="flex-1 aspect-video">
                     <VideoPlayerPro title="Analysis Overlay" src={null} />
@@ -229,7 +296,14 @@ const VideoChatArea: React.FC = () => {
                             case 'reasoning':
                                 return <AIThinkingBlock key={message.id} content={message.content} />;
                             case 'assistant':
-                                return <AIMessage key={message.id} content={message.content} onReferenceClick={handleReferenceClick} />;
+                                return <AIMessage
+                                    key={message.id}
+                                    content={message.content}
+                                    onTimestampClick={jumpToTimestamp}
+                                    scenes={scenes}
+                                    transcripts={transcripts}
+                                    objects={objects}
+                                />;
                             default:
                                 return null;
                         }
