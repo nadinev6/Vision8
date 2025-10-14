@@ -208,29 +208,41 @@ interface VideoChatAreaProps {
     objects: TrackedObject[];
     onTimeUpdate: (time: number) => void;
     videoSrc: string | null;
+    generatedVideoSrc: string | null;
     onVideoUpload: (file: File) => void;
     onAnalyze: () => void;
     isAnalyzing: boolean;
     messages: Message[];
     onSendMessage: (content: string) => void;
+    primaryVideoRef: React.RefObject<HTMLVideoElement>;
+    syncMode: 'none' | 'video';
+    onSyncChange: () => void;
 }
 
-const VideoChatArea: React.FC<VideoChatAreaProps> = ({ jumpToTimestamp, seekTime, onSeeked, scenes, transcripts, objects, onTimeUpdate, videoSrc, onVideoUpload, onAnalyze, isAnalyzing, messages, onSendMessage }) => {
+const VideoChatArea: React.FC<VideoChatAreaProps> = ({ jumpToTimestamp, seekTime, onSeeked, scenes, transcripts, objects, onTimeUpdate, videoSrc, generatedVideoSrc, onVideoUpload, onAnalyze, isAnalyzing, messages, onSendMessage, primaryVideoRef, syncMode, onSyncChange }) => {
     return (
         <div className="flex-1 flex flex-col p-4 gap-4 min-w-0">
             {/* Video Players */}
             <div className="flex gap-4">
                 <div className="flex-1 aspect-video">
                     <VideoPlayerPro 
+                        ref={primaryVideoRef}
                         title="Upload a video to begin" 
                         src={videoSrc}
                         seekToTime={seekTime}
                         onSeeked={onSeeked}
                         onTimeUpdate={onTimeUpdate}
+                        activeSyncMode={syncMode}
+                        onSyncChange={onSyncChange}
                     />
                 </div>
                 <div className="flex-1 aspect-video">
-                    <VideoPlayerPro title="Analysis Overlay" src={null} />
+                    <VideoPlayerPro 
+                        title="Generated Video" 
+                        src={generatedVideoSrc}
+                        syncMaster={syncMode === 'video' ? primaryVideoRef : null}
+                        forceMute={syncMode === 'video'}
+                    />
                 </div>
             </div>
 

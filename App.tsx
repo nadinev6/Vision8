@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import HistorySidebar from './components/HistorySidebar';
 import AnalysisPanel, { Scene, TranscriptItem, TrackedObject } from './components/AnalysisPanel';
 import VideoChatArea, { Message, UserMessage, ReasoningMessage, AssistantMessage } from './components/VideoChatArea';
@@ -14,9 +14,15 @@ const App: React.FC = () => {
     const [activeTimestamp, setActiveTimestamp] = useState<number | null>(null);
     const [activeAnalysisTab, setActiveAnalysisTab] = useState('scene');
     
+    // State for video player synchronization
+    const primaryVideoRef = useRef<HTMLVideoElement>(null);
+    const [syncMode, setSyncMode] = useState<'none' | 'video'>('none');
+    const handleSyncChange = () => { setSyncMode(prev => prev === 'video' ? 'none' : 'video'); };
+
     // State for video and analysis
     const [videoFile, setVideoFile] = useState<File | null>(null);
     const [videoSrc, setVideoSrc] = useState<string | null>(null);
+    const [generatedVideoSrc, setGeneratedVideoSrc] = useState<string | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisError, setAnalysisError] = useState<string | null>(null);
     
@@ -40,6 +46,23 @@ const App: React.FC = () => {
         }
     }, []);
 
+    useEffect(() => {
+        if (videoFile) {
+            const url = URL.createObjectURL(videoFile);
+            setVideoSrc(url);
+            setGeneratedVideoSrc(url); // Mirror video for now
+
+            // Cleanup function
+            return () => {
+                URL.revokeObjectURL(url);
+            };
+        } else {
+            // If videoFile is null, clear the sources
+            setVideoSrc(null);
+            setGeneratedVideoSrc(null);
+        }
+    }, [videoFile]);
+
     // Save history to localStorage whenever it changes
     useEffect(() => {
         if (history.length > 0) {
@@ -52,9 +75,9 @@ const App: React.FC = () => {
         const sessionToLoad = sessions.find(s => s.id === id);
         if (sessionToLoad) {
             setCurrentSessionId(id);
-            setVideoSrc(null);
-            setVideoFile(null);
+            setVideoFile(null); // This will trigger useEffect to clear video sources
             setAnalysisError(null);
+            setSyncMode('none'); // Reset sync mode on session change
             setActiveTimestamp(sessionToLoad.lastTimestamp);
             setSeekTime(sessionToLoad.lastTimestamp);
         }
@@ -116,9 +139,7 @@ const App: React.FC = () => {
         setHistory(prev => [newSession, ...prev]);
         setCurrentSessionId(newSession.id);
         
-        if (videoSrc) URL.revokeObjectURL(videoSrc);
         setVideoFile(file);
-        setVideoSrc(URL.createObjectURL(file));
         setAnalysisError(null);
         setActiveTimestamp(0);
     };
@@ -272,11 +293,15 @@ const App: React.FC = () => {
                     objects={objects}
                     onTimeUpdate={handleVideoTimeUpdate}
                     videoSrc={videoSrc}
+                    generatedVideoSrc={generatedVideoSrc}
                     onVideoUpload={handleVideoUpload}
                     onAnalyze={handleAnalyze}
                     isAnalyzing={isAnalyzing}
                     messages={messages}
                     onSendMessage={handleSendMessage}
+                    primaryVideoRef={primaryVideoRef}
+                    syncMode={syncMode}
+                    onSyncChange={handleSyncChange}
                 />
 
                 <div

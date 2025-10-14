@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useImperativeHandle, useCallback } from "react";
 import { Button } from "./ui/button";
 import { Popover, PopoverTrigger, PopoverContent } from "./ui/popover";
 import { Slider } from "./ui/slider";
@@ -11,6 +11,10 @@ interface VideoPlayerProProps {
   seekToTime?: number | null;
   onSeeked?: () => void;
   onTimeUpdate?: (time: number) => void;
+  syncMaster?: React.RefObject<HTMLVideoElement> | null;
+  forceMute?: boolean;
+  onSyncChange?: () => void;
+  activeSyncMode?: 'video' | 'none';
 }
 
 // Interfaces for cross-browser fullscreen support
@@ -32,9 +36,21 @@ interface FullscreenableDocument extends Document {
 const FRAME_RATE = 30; // Assuming 30 FPS
 const FRAME_STEP = 1 / FRAME_RATE;
 
-const VideoPlayerPro: React.FC<VideoPlayerProProps> = ({ src, title, seekToTime, onSeeked, onTimeUpdate }) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
+const VideoPlayerPro = React.forwardRef<HTMLVideoElement, VideoPlayerProProps>(({ src, title, seekToTime, onSeeked, onTimeUpdate, syncMaster, forceMute, onSyncChange, activeSyncMode }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
+
+  const videoCallbackRef = useCallback((node: HTMLVideoElement) => {
+    if (node) {
+      setVideoEl(node);
+      if (typeof ref === 'function') {
+        ref(node);
+      } else if (ref) {
+        ref.current = node;
+      }
+    }
+  }, [ref]);
+
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isEnded, setIsEnded] = useState<boolean>(false);
   const [volume, setVolume] = useState<number>(1);
@@ -47,15 +63,16 @@ const VideoPlayerPro: React.FC<VideoPlayerProProps> = ({ src, title, seekToTime,
   const [currentFrame, setCurrentFrame] = useState<number>(0);
   const [totalFrames, setTotalFrames] = useState<number>(0);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const isSlave = !!syncMaster;
 
   useEffect(() => {
-    if (seekToTime !== null && seekToTime !== undefined && videoRef.current) {
-        videoRef.current.currentTime = seekToTime;
+    if (seekToTime !== null && seekToTime !== undefined && videoEl) {
+        videoEl.currentTime = seekToTime;
         if (onSeeked) {
             onSeeked();
         }
     }
-  }, [seekToTime, onSeeked]);
+  }, [seekToTime, onSeeked, videoEl]);
 
   useEffect(() => {
     // Reset state when src changes
@@ -86,35 +103,75 @@ const VideoPlayerPro: React.FC<VideoPlayerProProps> = ({ src, title, seekToTime,
       document.removeEventListener("MSFullscreenChange", handleFullscreenChange);
     };
   }, []);
+  
+  useEffect(() => {
+    if (videoEl) {
+        videoEl.muted = isMuted || !!forceMute;
+    }
+  }, [isMuted, forceMute, videoEl]);
+
+  useEffect(() => {
+    const master = syncMaster?.current;
+    const slave = videoEl;
+    if (!master || !slave || !isSlave) return;
+
+    const handleMasterPlay = () => { if(slave.paused) { slave.play().catch(console.error); setIsPlaying(true); }};
+    const handleMasterPause = () => { if(!slave.paused) { slave.pause(); setIsPlaying(false); }};
+    const handleMasterSeek = () => {
+        if (Math.abs(slave.currentTime - master.currentTime) > 0.2) { // Add tolerance
+             slave.currentTime = master.currentTime;
+        }
+    };
+    
+    // Initial sync
+    handleMasterSeek();
+    if (master.paused) { handleMasterPause(); } else { handleMasterPlay(); }
+
+    master.addEventListener('play', handleMasterPlay);
+    master.addEventListener('pause', handleMasterPause);
+    master.addEventListener('timeupdate', handleMasterSeek);
+    master.addEventListener('seeking', handleMasterSeek);
+    master.addEventListener('seeked', handleMasterSeek);
+
+    return () => {
+        master.removeEventListener('play', handleMasterPlay);
+        master.removeEventListener('pause', handleMasterPause);
+        master.removeEventListener('timeupdate', handleMasterSeek);
+        master.removeEventListener('seeking', handleMasterSeek);
+        master.removeEventListener('seeked', handleMasterSeek);
+    };
+}, [syncMaster, isSlave, videoEl]);
 
   const togglePlay = () => {
-    if (!videoRef.current || !src) return;
+    const videoElement = videoEl;
+    if (!videoElement || !src) return;
     if (isEnded) {
-      videoRef.current.currentTime = 0;
+      videoElement.currentTime = 0;
       setIsEnded(false);
     }
-    isPlaying ? videoRef.current.pause() : videoRef.current.play();
+    isPlaying ? videoElement.pause() : videoElement.play();
     setIsPlaying(!isPlaying);
   };
 
   const handleTimeUpdate = () => {
-    if (!videoRef.current) return;
-    const prog = (videoRef.current.currentTime / videoRef.current.duration) * 100;
+    const videoElement = videoEl;
+    if (!videoElement) return;
+    const prog = (videoElement.currentTime / videoElement.duration) * 100;
     setProgress(isFinite(prog) ? prog : 0);
-    setCurrentTime(videoRef.current.currentTime);
-    setCurrentFrame(Math.floor(videoRef.current.currentTime * FRAME_RATE));
-    if (videoRef.current.duration) {
-      setDuration(videoRef.current.duration);
-      setTotalFrames(Math.floor(videoRef.current.duration * FRAME_RATE));
+    setCurrentTime(videoElement.currentTime);
+    setCurrentFrame(Math.floor(videoElement.currentTime * FRAME_RATE));
+    if (videoElement.duration) {
+      setDuration(videoElement.duration);
+      setTotalFrames(Math.floor(videoElement.duration * FRAME_RATE));
     }
-    if (onTimeUpdate) {
-        onTimeUpdate(videoRef.current.currentTime);
+    if (onTimeUpdate && !isSlave) {
+        onTimeUpdate(videoElement.currentTime);
     }
   };
 
   const handleMetadataLoaded = () => {
-    if (videoRef.current) {
-        videoRef.current.playbackRate = playbackSpeed;
+    if (videoEl) {
+        videoEl.playbackRate = playbackSpeed;
     }
     handleTimeUpdate();
   };
@@ -125,22 +182,24 @@ const VideoPlayerPro: React.FC<VideoPlayerProProps> = ({ src, title, seekToTime,
   };
 
   const handleSeek = (percent: number) => {
-    if (!videoRef.current || !src) return;
-    const time = (percent / 100) * (videoRef.current.duration || 0);
-    if (isFinite(time)) videoRef.current.currentTime = time;
+    const videoElement = videoEl;
+    if (!videoElement || !src) return;
+    const time = (percent / 100) * (videoElement.duration || 0);
+    if (isFinite(time)) videoElement.currentTime = time;
     setProgress(percent);
   };
   
   const handleStep = (direction: 'forward' | 'backward') => {
-    if (!videoRef.current || !src) return;
+    const videoElement = videoEl;
+    if (!videoElement || !src) return;
     
     if (isPlaying) {
-        videoRef.current.pause();
+        videoElement.pause();
         setIsPlaying(false);
     }
     
-    const newTime = videoRef.current.currentTime + (direction === 'forward' ? FRAME_STEP : -FRAME_STEP);
-    videoRef.current.currentTime = Math.max(0, Math.min(newTime, videoRef.current.duration));
+    const newTime = videoElement.currentTime + (direction === 'forward' ? FRAME_STEP : -FRAME_STEP);
+    videoElement.currentTime = Math.max(0, Math.min(newTime, videoElement.duration));
   };
 
   const toggleFullscreen = () => {
@@ -173,7 +232,7 @@ const VideoPlayerPro: React.FC<VideoPlayerProProps> = ({ src, title, seekToTime,
     }
   };
   
-  const VolumeIcon = isMuted ? VolumeXIcon : volume > 0.5 ? Volume2Icon : Volume1Icon;
+  const VolumeIcon = (isMuted || !!forceMute) ? VolumeXIcon : volume > 0.5 ? Volume2Icon : Volume1Icon;
 
   return (
     <div
@@ -184,14 +243,14 @@ const VideoPlayerPro: React.FC<VideoPlayerProProps> = ({ src, title, seekToTime,
     >
       {src ? (
          <video
-            ref={videoRef}
+            ref={videoCallbackRef}
             key={src}
             className="w-full h-full object-contain"
             src={src}
             onTimeUpdate={handleTimeUpdate}
             onEnded={handleEnded}
             onLoadedMetadata={handleMetadataLoaded}
-            onClick={togglePlay}
+            onClick={isSlave ? undefined : togglePlay}
          />
       ) : (
         <p className="text-gray-400 font-medium">{title}</p>
@@ -206,31 +265,32 @@ const VideoPlayerPro: React.FC<VideoPlayerProProps> = ({ src, title, seekToTime,
         <div className="absolute bottom-0 left-0 w-full h-24 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
         <div className="relative z-10 px-4 pb-3">
           <div
-            className="relative w-full h-1.5 bg-white/20 rounded-full cursor-pointer group mb-2"
+            className={cn("relative w-full h-1.5 bg-white/20 rounded-full group mb-2", isSlave ? "cursor-default" : "cursor-pointer")}
             onClick={(e) => {
+              if (isSlave) return;
               const rect = e.currentTarget.getBoundingClientRect();
               const x = e.clientX - rect.left;
               handleSeek((x / rect.width) * 100);
             }}
           >
             <div className="absolute top-0 left-0 h-full bg-white rounded-full" style={{ width: `${progress}%` }}/>
-            <div className="absolute top-1/2 h-3 w-3 bg-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" style={{ left: `${progress}%`, transform: `translate(-50%, -50%)` }}/>
+            <div className={cn("absolute top-1/2 h-3 w-3 bg-white rounded-full transition-opacity", !isSlave && "opacity-0 group-hover:opacity-100")} style={{ left: `${progress}%`, transform: `translate(-50%, -50%)` }}/>
           </div>
 
           <div className="flex items-center justify-between text-white gap-4">
             <div className="flex flex-1 items-center gap-2 min-w-0">
-              <Button variant="ghost" size="icon" className="text-white hover:bg-white/20" onClick={() => handleStep('backward')}>
+              <Button variant="ghost" size="icon" className="text-white hover:bg-white/20" onClick={() => handleStep('backward')} disabled={isSlave}>
                 <SkipBackIcon className="w-5 h-5" />
               </Button>
-              <Button variant="ghost" size="icon" className="text-white hover:bg-white/20" onClick={togglePlay}>
+              <Button variant="ghost" size="icon" className="text-white hover:bg-white/20" onClick={togglePlay} disabled={isSlave}>
                 {isEnded ? <RotateCwIcon className="w-5 h-5" /> : isPlaying ? <PauseIcon className="w-5 h-5" /> : <PlayIcon className="w-5 h-5" />}
               </Button>
-              <Button variant="ghost" size="icon" className="text-white hover:bg-white/20" onClick={() => handleStep('forward')}>
+              <Button variant="ghost" size="icon" className="text-white hover:bg-white/20" onClick={() => handleStep('forward')} disabled={isSlave}>
                 <SkipForwardIcon className="w-5 h-5" />
               </Button>
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="ghost" size="icon" className="text-white hover:bg-white/20">
+                  <Button variant="ghost" size="icon" className="text-white hover:bg-white/20" disabled={!!forceMute}>
                       <VolumeIcon className="w-5 h-5" />
                   </Button>
                 </PopoverTrigger>
@@ -239,10 +299,11 @@ const VideoPlayerPro: React.FC<VideoPlayerProProps> = ({ src, title, seekToTime,
                     value={[isMuted ? 0 : volume * 100]}
                     onValueChange={(val: number[]) => {
                       const newVolume = val[0] / 100;
-                      if (videoRef.current) videoRef.current.volume = newVolume;
+                      if (videoEl) videoEl.volume = newVolume;
                       setVolume(newVolume);
-                      setIsMuted(newVolume === 0);
-                      if (videoRef.current) videoRef.current.muted = newVolume === 0;
+                      const muted = newVolume === 0;
+                      setIsMuted(muted);
+                      if (videoEl) videoEl.muted = muted;
                     }}
                   />
                 </PopoverContent>
@@ -259,22 +320,25 @@ const VideoPlayerPro: React.FC<VideoPlayerProProps> = ({ src, title, seekToTime,
                     <SettingsIcon className="w-5 h-5" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="bg-white/90 backdrop-blur-md border-gray-200 text-black w-40 p-2 right-0">
+                <PopoverContent className="bg-white/90 backdrop-blur-md border-gray-200 text-black w-32 p-2 right-0">
                   <div className="flex flex-col gap-1">
                     <span className="text-xs font-medium text-gray-500 px-2">Speed</span>
                     {[0.5, 1, 1.5, 2].map((s) => (
                       <Button key={s} variant={playbackSpeed === s ? "ghost" : "ghost"} size="sm" className={cn("w-full justify-start text-xs text-black", playbackSpeed === s && "bg-gray-200 font-semibold")}
                         onClick={() => {
-                          if (videoRef.current) videoRef.current.playbackRate = s;
+                          if (videoEl) videoEl.playbackRate = s;
                           setPlaybackSpeed(s);
                         }}
                       >
                         {s === 1 ? 'Normal' : `${s}x`}
                       </Button>
                     ))}
-                    <div className="h-px bg-gray-200 my-1"></div>
-                    <Button variant="ghost" size="sm" className="w-full justify-start text-xs text-black hover:bg-gray-200">Sync Audio</Button>
-                    <Button variant="ghost" size="sm" className="w-full justify-start text-xs text-black hover:bg-gray-200">Sync Video</Button>
+                    {onSyncChange && (
+                        <>
+                            <div className="h-px bg-gray-200 my-1"></div>
+                            <Button onClick={onSyncChange} variant="ghost" size="sm" className={cn("w-full justify-start text-xs text-black hover:bg-gray-200", activeSyncMode === 'video' && "bg-black text-white hover:bg-zinc-800 font-semibold")}>Sync Video</Button>
+                        </>
+                    )}
                   </div>
                 </PopoverContent>
               </Popover>
@@ -287,6 +351,6 @@ const VideoPlayerPro: React.FC<VideoPlayerProProps> = ({ src, title, seekToTime,
       </div>
     </div>
   );
-};
+});
 
 export default VideoPlayerPro;
