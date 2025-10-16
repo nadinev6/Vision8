@@ -10,6 +10,9 @@
   <a href="https://www.typescriptlang.org/" target="_blank"><img src="https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript"></a>
   <a href="https://tailwindcss.com/" target="_blank"><img src="https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" alt="Tailwind CSS"></a>
   <a href="https://deepmind.google/technologies/gemini/" target="_blank"><img src="https://img.shields.io/badge/Google_Gemini-8E44AD?style=for-the-badge&logo=google-cloud&logoColor=white" alt="Google Gemini"></a>
+  <a href="https://fastapi.tiangolo.com/" target="_blank"><img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI"></a>
+  <a href="https://www.elastic.co/elasticsearch/" target="_blank"><img src="https://img.shields.io/badge/Elasticsearch-005571?style=for-the-badge&logo=elasticsearch&logoColor=white" alt="Elasticsearch"></a>
+  <a href="https://redis.io/" target="_blank"><img src="https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white" alt="Redis"></a>
 </p>
 
 ## Table of Contents
@@ -17,12 +20,14 @@
   - [🚀 About Vision 8](#about-vision-8)
     - [🎯 Video-to-Video Generation](#video-to-video-generation)
   - [✨ Key Features](#key-features)
-  - [💻 Technology Stack](#technology-stack)
-  - [🛠️ Getting Started](#getting-started)
+  - [🏗️ Architecture](#️-architecture)
+  - [💻 Technology Stack](#-technology-stack)
+  - [🛠️ Getting Started](#️-getting-started)
     - [Prerequisites](#prerequisites)
-    - [Installation](#installation)
-  - [🤝 Contributing](#contributing)
-  - [📄 License](#license)
+    - [Backend Setup](#backend-setup)
+    - [Frontend Setup](#frontend-setup)
+  - [🤝 Contributing](#-contributing)
+  - [📄 License](#-license)
 
 
 ## 🚀 About Vision 8
@@ -36,46 +41,96 @@ Vision 8 is engineered as a foundational platform for high-fidelity video-to-vid
 ## ✨ Key Features
 
 -   **🤖 AI-Powered Video Analysis**: Utilizes `gemini-2.5-flash` for fast, comprehensive video deconstruction into scenes, transcripts, and tracked objects.
--   **💬 Conversational Intelligence (RAG)**: An integrated chat interface provides intelligent, grounded answers using a Retrieval-Augmented Generation (RAG) pipeline with Gemini Function Calling. All responses are fact-checked and contextually enriched with data retrieved directly from the video's analysis.
+-   **💬 Conversational Intelligence (RAG)**: An integrated chat interface provides intelligent, grounded answers using a Retrieval-Augmented Generation (RAG) pipeline powered by a FastAPI backend, Elasticsearch for vector search, and Gemini Function Calling.
 -   **🔄 Synchronized Playback**: Clicking any inline citation in the chat automatically navigates the video player to the exact moment referenced, creating a seamless link between conversation, data, and playback.
 -   **🖥️ Advanced UI/UX**: Features a fully resizable layout, a dual-player setup for comparison, and frame-accurate playback controls.
+
+## 🏗️ Architecture
+
+Vision 8 is a full-stack application with a React frontend and a Python (FastAPI) backend.
+
+1.  **Video Ingestion**: The user uploads a video through the client. The frontend extracts representative frames and sends them to the backend.
+2.  **AI Deconstruction**: The backend's `metadata_generator` service uses the Gemini API to analyze the frames and generate structured metadata (scenes, descriptions, objects).
+3.  **Vectorization & Indexing**: The `elastic_service` generates vector embeddings for the textual metadata and ingests the complete document into an Elasticsearch index. Vector embeddings are cached in Redis by the `cache_service` to reduce latency and cost.
+4.  **Conversational RAG**: When the user asks a question, the frontend calls the backend's `/chat` endpoint. The `conversation_handler` orchestrates the RAG pipeline:
+    *   It generates a vector for the user's query.
+    *   It performs a semantic search against Elasticsearch to retrieve relevant video segments.
+    *   It passes the retrieved context and the original query to the Gemini model to generate a grounded, accurate answer.
+    *   The structured response is returned to the frontend for display.
 
 ## 💻 Technology Stack
 
 | Component | Technology / Role |
 | :--- | :--- |
-| **Frontend** | React, TypeScript, Tailwind CSS |
-| **Video Player** | Custom component built with modern web APIs (Fullscreen, etc.) |
-| **AI/LLM** | Google Gemini API (`gemini-2.5-flash`, Function Calling) |
-| **Data Retrieval** | RAG pipeline simulated in-app (conceptualized for Elasticsearch) |
-| **Deployment** | Designed for serverless environments like Cloud Run |
+| **Frontend** | React, TypeScript, Tailwind CSS, Vite |
+| **Backend** | Python, FastAPI, Uvicorn |
+| **AI/LLM** | Google Gemini API (`gemini-2.5-flash`, `text-embedding-004`) |
+| **Database** | Elasticsearch (Vector Search, Metadata Storage) |
+| **Cache** | Redis (Vector Embedding Cache) |
+| **Deployment** | Designed for serverless environments like Google Cloud Run |
 
 ## 🛠️ Getting Started
 
-This project is a static web application and can be run with any local web server.
+This project consists of a React frontend and a FastAPI backend.
 
 ### Prerequisites
 
--   A modern web browser
+-   Node.js and npm/yarn
+-   Python 3.9+ and pip
+-   Access to an Elasticsearch cluster
+-   Access to a Redis instance
 -   A Google Gemini API Key
 
-### Installation
+### Backend Setup
 
-1.  **Clone the repository:**
+1.  **Navigate to the backend directory:**
     ```bash
-    git clone https://github.com/your-repo/vision-8.git
-    cd vision-8
+    cd vision8-backend
     ```
 
-2.  **Set up your Gemini API Key:**
-    The application requires a `process.env.API_KEY` to be available in its environment. The application code expects this to be present.
-
-3.  **Serve the application:**
-    Use a simple HTTP server to run the `index.html` file. A great option is `serve`.
+2.  **Install Python dependencies:**
     ```bash
-    npx serve .
+    pip install -r requirements.txt
     ```
-    Now, open your browser to the URL provided by the server (e.g., `http://localhost:3000`).
+
+3.  **Configure environment variables:**
+    Create a `.env` file by copying the example and fill in your credentials.
+    ```bash
+    cp .env.example .env
+    ```
+    -   `ELASTIC_URL`, `ELASTIC_API_KEY`, `ELASTIC_INDEX`
+    -   `GEMINI_API_KEY`
+    -   `REDIS_URL`, `REDIS_API`
+
+4.  **Run the backend server:**
+    The server will start on `http://localhost:8000`.
+    ```bash
+    uvicorn src.main:app --reload
+    ```
+
+### Frontend Setup
+
+1.  **Navigate to the root project directory:**
+    ```bash
+    cd .. 
+    ```
+
+2.  **Install Node.js dependencies:**
+    ```bash
+    npm install
+    ```
+
+3.  **Set up your Gemini API Key:**
+    Create a `.env` file in the root directory and add your Gemini API key. This is used for the initial client-side analysis.
+    ```
+    GEMINI_API_KEY=your_google_gemini_api_key
+    ```
+
+4.  **Run the frontend development server:**
+    The application will be available at `http://localhost:3000`.
+    ```bash
+    npm run dev
+    ```
 
 ## 🤝 Contributing
 

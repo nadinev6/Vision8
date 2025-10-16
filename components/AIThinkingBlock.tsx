@@ -1,18 +1,59 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Card } from "./Card";
 import { ThoughtIcon } from "./icons";
-import { ReasoningMessage } from "./VideoChatArea";
 
-interface AIThinkingBlockProps {
-    content: ReasoningMessage['content'];
+export interface ReasoningMessage {
+  type: 'reasoning';
+  content: {
+    steps: string[];
+  };
 }
 
-const AIThinkingBlock: React.FC<AIThinkingBlockProps> = ({ content }) => {
+export interface GenerationProgress {
+  stage: GenerationStage;
+  progress: number;
+  message: string;
+  thinking?: string[];
+}
+
+export enum GenerationStage {
+  ANALYZING = 'analyzing',
+  EXTRACTING = 'extracting',
+  GENERATING = 'generating',
+  STITCHING = 'stitching',
+  COMPLETE = 'complete',
+  ERROR = 'error'
+}
+
+interface AIThinkingBlockProps {
+  content?: ReasoningMessage['content'];
+  generationProgress?: GenerationProgress;
+}
+
+const stageEmoji = {
+  [GenerationStage.ANALYZING]: '🔍',
+  [GenerationStage.EXTRACTING]: '✂️',
+  [GenerationStage.GENERATING]: '🎨',
+  [GenerationStage.STITCHING]: '🔄',
+  [GenerationStage.COMPLETE]: '✅',
+  [GenerationStage.ERROR]: '❌'
+};
+
+const stageColors = {
+  [GenerationStage.ANALYZING]: 'bg-blue-500',
+  [GenerationStage.EXTRACTING]: 'bg-purple-500',
+  [GenerationStage.GENERATING]: 'bg-green-500',
+  [GenerationStage.STITCHING]: 'bg-orange-500',
+  [GenerationStage.COMPLETE]: 'bg-emerald-500',
+  [GenerationStage.ERROR]: 'bg-red-500'
+};
+
+export const AIThinkingBlock: React.FC<AIThinkingBlockProps> = ({ content, generationProgress }) => {
     const contentRef = useRef<HTMLDivElement>(null);
     const scrollIntervalRef = useRef<number | null>(null);
     const [timer, setTimer] = useState(0);
 
-    const ThinkingContent = content.steps.join('\n\n');
+    const ThinkingContent = content ? content.steps.join('\n\n') : '';
 
     useEffect(() => {
       const timerInterval = setInterval(() => {
@@ -22,7 +63,7 @@ const AIThinkingBlock: React.FC<AIThinkingBlockProps> = ({ content }) => {
     }, []);
 
     useEffect(() => {
-        if (contentRef.current) {
+        if (contentRef.current && !generationProgress) {
             const el = contentRef.current;
             const maxScroll = el.scrollHeight - el.clientHeight;
             
@@ -48,7 +89,50 @@ const AIThinkingBlock: React.FC<AIThinkingBlockProps> = ({ content }) => {
             clearInterval(scrollIntervalRef.current);
           }
         };
-    }, [ThinkingContent]);
+    }, [ThinkingContent, generationProgress]);
+
+    if (generationProgress) {
+      return (
+        <div className="flex flex-col p-3 max-w-3xl mx-auto my-4 text-sm">
+          <div className="flex items-center justify-start gap-2 mb-2">
+            <ThoughtIcon size={18} className="text-gray-500" />
+            <p className="font-medium text-gray-600">
+              Processing for {timer} seconds
+            </p>
+          </div>
+          <Card className="relative bg-gray-50 p-4 border-gray-200/80">
+            <div className="flex items-center gap-2 mb-3">
+              <div className={`w-2 h-2 rounded-full ${stageColors[generationProgress.stage]} animate-pulse`} />
+              <span className="text-sm font-medium text-gray-700">
+                {stageEmoji[generationProgress.stage]} {generationProgress.stage.charAt(0).toUpperCase() + generationProgress.stage.slice(1)}
+              </span>
+              <div className="flex-1 h-1 bg-gray-200 rounded">
+                <div
+                  className={`h-full rounded transition-all ${stageColors[generationProgress.stage]}`}
+                  style={{ width: `${generationProgress.progress}%` }}
+                />
+              </div>
+              <span className="text-sm font-mono text-gray-500">
+                {generationProgress.progress}%
+              </span>
+            </div>
+
+            <div className="space-y-2 text-sm">
+              <p className="font-medium text-gray-700">{generationProgress.message}</p>
+              {generationProgress.thinking && generationProgress.thinking.length > 0 && (
+                <div className="pl-4 border-l-2 border-gray-200 space-y-1">
+                  {generationProgress.thinking.map((thought, index) => (
+                    <p key={index} className="text-gray-600">
+                      {thought}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
+      );
+    }
 
     return (
       <div className="flex flex-col p-3 max-w-3xl mx-auto my-4 text-sm">

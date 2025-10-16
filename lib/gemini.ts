@@ -1,13 +1,26 @@
-import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
 import { Scene, TranscriptItem, TrackedObject } from '../components/AnalysisPanel';
 import { formatTime } from "./utils";
 
 // This is a placeholder for the actual API key which should be handled securely
-const API_KEY = process.env.API_KEY;
+const API_KEY = process.env.GEMINI_API_KEY;
 if (!API_KEY) {
-  console.warn("API_KEY not found. Please set the environment variable.");
+  console.warn("GEMINI_API_KEY not found. Please ensure it's set in your .env file and correctly exposed by Vite.");
 }
-const ai = new GoogleGenAI({ apiKey: API_KEY });
+
+import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
+
+// Initialize GoogleGenAI with error handling
+let ai: GoogleGenAI;
+try {
+  console.log("Initializing GoogleGenAI with API key:", API_KEY ? "Present" : "Missing");
+  ai = new GoogleGenAI({ apiKey: API_KEY });
+  console.log("GoogleGenAI initialized successfully");
+} catch (error) {
+  console.error("Failed to initialize GoogleGenAI:", error);
+  console.error("Error details:", error instanceof Error ? error.message : String(error));
+  // Create a fallback that won't crash the app
+  ai = null as any;
+}
 
 const analysisSchema = {
   type: Type.OBJECT,
@@ -109,6 +122,11 @@ async function getVideoFrames(videoFile: File, maxFrames: number): Promise<{ dat
 }
 
 export async function analyzeVideo(videoFile: File): Promise<{ scenes: Scene[], transcripts: TranscriptItem[], objects: TrackedObject[] }> {
+    // Check if GoogleGenAI is properly initialized
+    if (!ai) {
+        throw new Error("GoogleGenAI is not initialized. Please check your API key configuration.");
+    }
+
     const FRAMES_TO_EXTRACT = 20; // Limit frames to avoid exceeding token limits
     const frames = await getVideoFrames(videoFile, FRAMES_TO_EXTRACT);
 
@@ -128,7 +146,7 @@ export async function analyzeVideo(videoFile: File): Promise<{ scenes: Scene[], 
         The frames are sampled evenly from a video. Infer the events, dialogue, and objects based on these frames.
         Provide accurate timestamps in seconds.
     `;
-    
+
     try {
       const response = await ai.models.generateContent({
           model: 'gemini-2.5-flash',
@@ -150,7 +168,7 @@ export async function analyzeVideo(videoFile: File): Promise<{ scenes: Scene[], 
 
 // --- RAG Pipeline with Function Calling ---
 
-const searchVideoContentTool: FunctionDeclaration = {
+const searchVideoContentTool: any = {
     name: 'searchVideoContent',
     description: "Searches the video's analyzed content (scenes, transcripts, objects) to find information relevant to a user's query. Returns context that helps answer the user's question.",
     parameters: {
@@ -214,6 +232,10 @@ export async function generateChatResponseWithRAG(
       objects: TrackedObject[]
     }
   ): Promise<string> {
+    // Check if GoogleGenAI is properly initialized
+    if (!ai) {
+        throw new Error("GoogleGenAI is not initialized. Please check your API key configuration.");
+    }
     const model = 'gemini-2.5-flash';
     const tools = [{ functionDeclarations: [searchVideoContentTool] }];
     const systemInstruction = `You are a video analysis assistant.

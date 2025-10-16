@@ -2,8 +2,9 @@ import React, { useRef, useState, useEffect, useImperativeHandle, useCallback } 
 import { Button } from "./ui/button";
 import { Popover, PopoverTrigger, PopoverContent } from "./ui/popover";
 import { Slider } from "./ui/slider";
-import { PlayIcon, PauseIcon, Volume2Icon, Volume1Icon, VolumeXIcon, Maximize2Icon, Minimize2Icon, RotateCwIcon, SettingsIcon, SkipBackIcon, SkipForwardIcon } from "./icons";
+import { PlayIcon, PauseIcon, Volume2Icon, Volume1Icon, VolumeXIcon, Maximize2Icon, Minimize2Icon, RotateCwIcon, SettingsIcon, SkipBackIcon, SkipForwardIcon, ScissorsIcon } from "./icons";
 import { cn, formatTime } from "../lib/utils";
+import { SceneExtractor } from "./SceneExtractor";
 
 interface VideoPlayerProProps {
   src: string | null;
@@ -15,6 +16,7 @@ interface VideoPlayerProProps {
   forceMute?: boolean;
   onSyncChange?: () => void;
   activeSyncMode?: 'video' | 'none';
+  onSceneExtracted?: (clipUrl: string, startTime: number, endTime: number) => void;
 }
 
 // Interfaces for cross-browser fullscreen support
@@ -320,24 +322,45 @@ const VideoPlayerPro = React.forwardRef<HTMLVideoElement, VideoPlayerProProps>((
                     <SettingsIcon className="w-5 h-5" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="bg-white/90 backdrop-blur-md border-gray-200 text-black w-32 p-2 right-0">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs font-medium text-gray-500 px-2">Speed</span>
-                    {[0.5, 1, 1.5, 2].map((s) => (
-                      <Button key={s} variant={playbackSpeed === s ? "ghost" : "ghost"} size="sm" className={cn("w-full justify-start text-xs text-black", playbackSpeed === s && "bg-gray-200 font-semibold")}
-                        onClick={() => {
-                          if (videoEl) videoEl.playbackRate = s;
-                          setPlaybackSpeed(s);
-                        }}
-                      >
-                        {s === 1 ? 'Normal' : `${s}x`}
-                      </Button>
-                    ))}
+                <PopoverContent className="bg-white/90 backdrop-blur-md border-gray-200 text-black w-[320px] p-2 right-0">
+                  <div className="flex flex-col gap-2">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs font-medium text-gray-500 px-2">Speed</span>
+                      <div className="grid grid-cols-4 gap-1">
+                        {[0.5, 1, 1.5, 2].map((s) => (
+                          <Button key={s} variant={playbackSpeed === s ? "ghost" : "ghost"} size="sm" className={cn("justify-start text-xs text-black", playbackSpeed === s && "bg-gray-200 font-semibold")}
+                            onClick={() => {
+                              if (videoEl) videoEl.playbackRate = s;
+                              setPlaybackSpeed(s);
+                            }}
+                          >
+                            {s === 1 ? 'Normal' : `${s}x`}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    {src && videoEl && (
+                      <>
+                        <div className="h-px bg-gray-200"></div>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-xs font-medium text-gray-500 px-2">Scene Extraction</span>
+                          <SceneExtractor
+                            videoUrl={src}
+                            videoDuration={duration}
+                            onSceneExtracted={onSceneExtracted}
+                          />
+                        </div>
+                      </>
+                    )}
+
                     {onSyncChange && (
-                        <>
-                            <div className="h-px bg-gray-200 my-1"></div>
-                            <Button onClick={onSyncChange} variant="ghost" size="sm" className={cn("w-full justify-start text-xs text-black hover:bg-gray-200", activeSyncMode === 'video' && "bg-black text-white hover:bg-zinc-800 font-semibold")}>Sync Video</Button>
-                        </>
+                      <>
+                        <div className="h-px bg-gray-200"></div>
+                        <Button onClick={onSyncChange} variant="ghost" size="sm" className={cn("w-full justify-start text-xs text-black hover:bg-gray-200", activeSyncMode === 'video' && "bg-black text-white hover:bg-zinc-800 font-semibold")}>
+                          Sync Video
+                        </Button>
+                      </>
                     )}
                   </div>
                 </PopoverContent>

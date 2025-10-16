@@ -48,20 +48,57 @@ const App: React.FC = () => {
 
     useEffect(() => {
         if (videoFile) {
-            const url = URL.createObjectURL(videoFile);
-            setVideoSrc(url);
-            setGeneratedVideoSrc(url); // Mirror video for now
+            try {
+                console.log("Attempting to create object URL for video file:", videoFile.name);
+                const url = URL.createObjectURL(videoFile);
+                setVideoSrc(url);
+                setGeneratedVideoSrc(url); // Mirror video for now
+                console.log("Successfully created object URL:", url);
 
-            // Cleanup function
-            return () => {
-                URL.revokeObjectURL(url);
-            };
+                // Cleanup function
+                return () => {
+                    console.log("Revoking object URL:", url);
+                    URL.revokeObjectURL(url);
+                };
+            } catch (error) {
+                console.error("Error creating object URL for video file:", error);
+                setAnalysisError(`Failed to load video: ${error instanceof Error ? error.message : String(error)}`);
+                setVideoSrc(null);
+                setGeneratedVideoSrc(null);
+            }
         } else {
             // If videoFile is null, clear the sources
             setVideoSrc(null);
             setGeneratedVideoSrc(null);
+            console.log("Video file is null, clearing video sources.");
         }
     }, [videoFile]);
+
+    const handleVideoUpload = (file: File) => {
+        console.log("handleVideoUpload called with file:", file.name, file.type);
+        try {
+            const newSession: ChatSession = {
+                id: Date.now().toString(),
+                name: file.name,
+                createdAt: new Date().toISOString(),
+                videoName: file.name,
+                messages: [],
+                scenes: [], transcripts: [], objects: [],
+                lastTimestamp: 0,
+            };
+            
+            setHistory(prev => [newSession, ...prev]);
+            setCurrentSessionId(newSession.id);
+            
+            setVideoFile(file);
+            setAnalysisError(null);
+            setActiveTimestamp(0);
+            console.log("Video upload process initiated for file:", file.name);
+        } catch (error) {
+            console.error("Error in handleVideoUpload:", error);
+            setAnalysisError(`Failed to process video upload: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    };
 
     // Save history to localStorage whenever it changes
     useEffect(() => {
@@ -125,24 +162,6 @@ const App: React.FC = () => {
         }
     }, [scenes, objects, transcripts, currentSessionId, currentSession?.lastTimestamp]);
     
-    const handleVideoUpload = (file: File) => {
-        const newSession: ChatSession = {
-            id: Date.now().toString(),
-            name: file.name,
-            createdAt: new Date().toISOString(),
-            videoName: file.name,
-            messages: [],
-            scenes: [], transcripts: [], objects: [],
-            lastTimestamp: 0,
-        };
-        
-        setHistory(prev => [newSession, ...prev]);
-        setCurrentSessionId(newSession.id);
-        
-        setVideoFile(file);
-        setAnalysisError(null);
-        setActiveTimestamp(0);
-    };
 
     const handleAnalyze = async () => {
         if (!videoFile || !currentSessionId) {
@@ -266,13 +285,13 @@ const App: React.FC = () => {
     }, [rightPanelWidth]);
 
     return (
-        <div className="h-screen w-screen bg-gray-50 flex flex-col">
-            <header className="flex-shrink-0 bg-white border-b border-gray-200 px-4 h-[65px] flex items-center justify-between">
-                <div className="h-9 w-9 rounded-full bg-gradient-to-br from-gray-100 to-gray-300 flex items-center justify-center">
-                    <LogoIcon className="text-gray-800" size={20} />
+        <div className="min-h-screen min-w-screen bg-red-500 flex flex-col">
+            <header className="flex-shrink-0 bg-blue-500 border-b border-red-200 px-4 h-[65px] flex items-center justify-between">
+                <div className="h-9 w-9 rounded-full bg-yellow-500 flex items-center justify-center">
+                    <LogoIcon size={20} />
                 </div>
-                <button className="p-2 rounded-full hover:bg-gray-100 transition-colors" aria-label="User Login">
-                    <UserIcon className="h-6 w-6 text-gray-600" />
+                <button className="p-2 rounded-full hover:bg-green-500" aria-label="User Login">
+                    <UserIcon className="h-6 w-6" />
                 </button>
             </header>
             <div className="flex flex-1 overflow-hidden">
