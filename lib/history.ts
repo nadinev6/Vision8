@@ -35,15 +35,3 @@ export function saveHistory(history: ChatSession[]): void {
         console.error("Failed to save chat history to localStorage", error);
     }
 }
-
-export function deleteSession(sessionId: string): ChatSession[] {
-    try {
-        const history = getHistory();
-        const updatedHistory = history.filter(session => session.id !== sessionId);
-        saveHistory(updatedHistory);
-        return updatedHistory;
-    } catch (error) {
-        console.error("Failed to delete session from history", error);
-        return getHistory();
-    }
-}

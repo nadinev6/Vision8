@@ -31,21 +31,21 @@ interface AIThinkingBlockProps {
 }
 
 const stageEmoji = {
-  [GenerationStage.ANALYZING]: '',
-  [GenerationStage.EXTRACTING]: '',
-  [GenerationStage.GENERATING]: '',
-  [GenerationStage.STITCHING]: '',
-  [GenerationStage.COMPLETE]: '',
-  [GenerationStage.ERROR]: ''
+  [GenerationStage.ANALYZING]: '🔍',
+  [GenerationStage.EXTRACTING]: '✂️',
+  [GenerationStage.GENERATING]: '🎨',
+  [GenerationStage.STITCHING]: '🔄',
+  [GenerationStage.COMPLETE]: '✅',
+  [GenerationStage.ERROR]: '❌'
 };
 
 const stageColors = {
-  [GenerationStage.ANALYZING]: 'bg-primary',
-  [GenerationStage.EXTRACTING]: 'bg-secondary',
-  [GenerationStage.GENERATING]: 'bg-accent',
-  [GenerationStage.STITCHING]: 'bg-muted',
-  [GenerationStage.COMPLETE]: 'bg-primary',
-  [GenerationStage.ERROR]: 'bg-destructive'
+  [GenerationStage.ANALYZING]: 'bg-blue-500',
+  [GenerationStage.EXTRACTING]: 'bg-purple-500',
+  [GenerationStage.GENERATING]: 'bg-green-500',
+  [GenerationStage.STITCHING]: 'bg-orange-500',
+  [GenerationStage.COMPLETE]: 'bg-emerald-500',
+  [GenerationStage.ERROR]: 'bg-red-500'
 };
 
 export const AIThinkingBlock: React.FC<AIThinkingBlockProps> = ({ content, generationProgress }) => {

@@ -311,8 +311,9 @@ async def liveness_check() -> Dict[str, str]:
 
 
 # Include API routes
-from api.routes import router as api_router
-app.include_router(api_router, prefix="/api/v1")
+# TODO: Uncomment when api.routes is implemented
+# from api.routes import router as api_router
+# app.include_router(api_router, prefix="/api/v1")
 
 
 # Root endpoint

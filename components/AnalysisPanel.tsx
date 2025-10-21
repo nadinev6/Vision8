@@ -34,8 +34,8 @@ const TabButton: React.FC<{ active: boolean; onClick: () => void; children: Reac
     <button
         onClick={onClick}
         className={cn(
-            'px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-200 focus:outline-none focus:ring-0 flex justify-center',
-            active ? 'bg-card text-card-foreground shadow-md hover:shadow-lg' : 'text-muted-foreground hover:bg-secondary hover:text-foreground shadow-sm hover:shadow-md',
+            'px-3 py-1.5 text-sm font-medium rounded-md transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 flex justify-center',
+            active ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:bg-gray-200 hover:text-gray-700',
             className
         )}
     >
@@ -49,7 +49,7 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ rightPanelWidth, scenes, 
     const renderContent = () => {
         if (isAnalyzing) {
             return (
-                <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground p-4">
+                <div className="flex flex-col items-center justify-center h-full text-center text-gray-500 p-4">
                     <RotateCwIcon className="w-6 h-6 animate-spin mb-3" />
                     <p className="font-semibold">Analyzing video...</p>
                     <p className="text-xs mt-1">This may take a few moments.</p>
@@ -70,7 +70,7 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ rightPanelWidth, scenes, 
         const hasData = scenes.length > 0 || transcripts.length > 0 || objects.length > 0;
         if (!hasData) {
             return (
-                 <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground p-4">
+                 <div className="flex flex-col items-center justify-center h-full text-center text-gray-500 p-4">
                     <VideoIcon className="w-8 h-8 mb-3" />
                     <p className="font-semibold">No analysis data</p>
                     <p className="text-sm mt-1">Upload a video and click 'Analyze' to begin.</p>
@@ -85,9 +85,9 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ rightPanelWidth, scenes, 
                         {scenes.map((scene, index) => {
                             const isActive = activeTimestamp === scene.timestamp;
                             return (
-                                <button key={index} onClick={() => onTimestampClick(scene.timestamp, 'scene')} className={cn("w-full text-left p-2 rounded-md hover:bg-secondary transition-colors", isActive && "bg-primary/5 ring-1 ring-primary/30")}>
-                                    <p className="text-xs text-primary font-mono">{formatTime(scene.timestamp)}</p>
-                                    <p className="text-sm text-foreground">{scene.description}</p>
+                                <button key={index} onClick={() => onTimestampClick(scene.timestamp)} className={cn("w-full text-left p-2 rounded-md hover:bg-gray-100 transition-colors", isActive && "bg-blue-50 ring-1 ring-blue-300")}>
+                                    <p className="text-xs text-blue-600 font-mono">{formatTime(scene.timestamp)}</p>
+                                    <p className="text-sm text-gray-700">{scene.description}</p>
                                 </button>
                             );
                         })}
@@ -99,9 +99,9 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ rightPanelWidth, scenes, 
                         {transcripts.map((item, index) => {
                             const isActive = activeTimestamp !== null && activeTimestamp >= item.startTime && activeTimestamp <= item.endTime;
                              return (
-                                 <button key={index} onClick={() => onTimestampClick(item.startTime, 'transcription')} className={cn("w-full text-left p-2 rounded-md hover:bg-secondary transition-colors", isActive && "bg-primary/5 ring-1 ring-primary/30")}>
-                                    <p className="text-xs text-primary font-mono">{formatTime(item.startTime)} - {formatTime(item.endTime)}</p>
-                                    <p className="text-sm text-foreground leading-relaxed">{item.text}</p>
+                                 <button key={index} onClick={() => onTimestampClick(item.startTime)} className={cn("w-full text-left p-2 rounded-md hover:bg-gray-100 transition-colors", isActive && "bg-blue-50 ring-1 ring-blue-300")}>
+                                    <p className="text-xs text-blue-600 font-mono">{formatTime(item.startTime)} - {formatTime(item.endTime)}</p>
+                                    <p className="text-sm text-gray-700 leading-relaxed">{item.text}</p>
                                 </button>
                             );
                         })}
@@ -113,9 +113,9 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ rightPanelWidth, scenes, 
                         {objects.map((obj, index) => {
                             const isActive = activeTimestamp === obj.timestamp;
                             return (
-                                <button key={index} onClick={() => onTimestampClick(obj.timestamp, 'object')} className={cn("w-full text-left p-2 flex justify-between items-center rounded-md hover:bg-secondary transition-colors", isActive && "bg-primary/5 ring-1 ring-primary/30")}>
-                                    <span className="text-sm text-foreground font-medium">{obj.name}</span>
-                                    <span className="text-xs text-primary font-mono">{formatTime(obj.timestamp)}</span>
+                                <button key={index} onClick={() => onTimestampClick(obj.timestamp)} className={cn("w-full text-left p-2 flex justify-between items-center rounded-md hover:bg-gray-100 transition-colors", isActive && "bg-blue-50 ring-1 ring-blue-300")}>
+                                    <span className="text-sm text-gray-700 font-medium">{obj.name}</span>
+                                    <span className="text-xs text-blue-600 font-mono">{formatTime(obj.timestamp)}</span>
                                 </button>
                             );
                         })}
@@ -127,37 +127,33 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ rightPanelWidth, scenes, 
     };
 
     return (
-        <aside className="bg-card border-l border-border flex flex-col flex-shrink-0" style={{ width: `${rightPanelWidth}px` }}>
-            <div className="p-4 border-b border-border flex-shrink-0">
+        <aside className="bg-white border-l border-gray-200 flex flex-col flex-shrink-0" style={{ width: `${rightPanelWidth}px` }}>
+            <div className="p-4 border-b border-gray-200 flex-shrink-0">
                 <div className="relative">
-                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <input
                         type="text"
                         placeholder="Filter analysis..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-9 pr-8 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring bg-card text-foreground"
+                        className="w-full pl-9 pr-8 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
                     />
                     {searchQuery && (
-                        <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                        <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                             <XIcon className="h-4 w-4" />
                         </button>
                     )}
                 </div>
             </div>
-            <div className="p-2 border-b border-border flex-shrink-0">
-                <div className="flex items-center space-x-1 bg-secondary p-1 rounded-lg">
+            <div className="p-2 border-b border-gray-200 flex-shrink-0">
+                <div className="flex items-center space-x-1 bg-gray-100 p-1 rounded-lg">
                     <TabButton className="flex-1" active={activeTab === 'scene'} onClick={() => onTabChange('scene')}>Scenes</TabButton>
                     <TabButton className="flex-1" active={activeTab === 'transcription'} onClick={() => onTabChange('transcription')}>Transcript</TabButton>
                     <TabButton className="flex-1" active={activeTab === 'object'} onClick={() => onTabChange('object')}>Objects</TabButton>
                 </div>
             </div>
-            <div className="flex-grow relative min-h-0">
-                <div className="absolute inset-0">
-                    <div className="h-full overflow-y-auto p-2 custom-scrollbar">
-                        {renderContent()}
-                    </div>
-                </div>
+            <div className="flex-grow overflow-y-auto">
+                {renderContent()}
             </div>
         </aside>
     );

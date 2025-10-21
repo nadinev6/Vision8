@@ -1,5 +1,4 @@
 import React, { useMemo } from 'react';
-import ReactMarkdown from 'react-markdown';
 import { cn } from '../lib/utils';
 import { AssistantIcon, UserIcon } from './icons';
 import AIChatInput from './AIChatInput';
@@ -12,9 +11,9 @@ import { Popover, PopoverTrigger, PopoverContent } from './ui/popover';
 
 // --- TYPE DEFINITIONS ---
 export type UserMessage = {
-    id: string;
-    role: 'user';
-    content: string;
+  id: string;
+  role: 'user';
+  content: string;
 }
 
 export type ReasoningMessageContent = {
@@ -29,13 +28,13 @@ export type ReasoningMessage = {
 }
 
 export type AssistantMessageContent = {
-    text: string;
+  text: string;
 }
 
 export type AssistantMessage = {
-    id: string;
-    role: 'assistant';
-    content: AssistantMessageContent;
+  id: string;
+  role: 'assistant';
+  content: AssistantMessageContent;
 }
 
 export type Message = UserMessage | ReasoningMessage | AssistantMessage;
@@ -44,69 +43,30 @@ export type Message = UserMessage | ReasoningMessage | AssistantMessage;
 
 const CitationPopoverContent: React.FC<{
     analysisItems: { type: string; data: Scene | TranscriptItem | TrackedObject }[];
-    onTimestampClick: (time: number, typeHint?: string) => void;
-}> = ({ analysisItems, onTimestampClick }) => {
+}> = ({ analysisItems }) => {
     const [activeTab, setActiveTab] = React.useState(analysisItems[0]?.type || null);
 
     if (!activeTab) return null;
 
     const activeItem = analysisItems.find(item => item.type === activeTab);
 
-    const getTimestamp = (item: any) => {
-        switch (item.type) {
-            case 'Scene':
-                return (item.data as Scene).timestamp;
-            case 'Transcript':
-                return (item.data as TranscriptItem).startTime;
-            case 'Object':
-                return (item.data as TrackedObject).timestamp;
-            default:
-                return 0;
-        }
-    };
-
-    const formatTime = (seconds: number): string => {
-        const mins = Math.floor(seconds / 60);
-        const secs = Math.floor(seconds % 60);
-        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    };
-
     const renderContent = () => {
         if (!activeItem) return null;
-        const timestamp = getTimestamp(activeItem);
-
-        return (
-            <div className="space-y-2">
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onTimestampClick(timestamp, activeItem.type.toLowerCase());
-                        // Scroll to top of the page
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                    }}
-                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-md text-sm font-mono transition-colors"
-                >
-                    Jump to {formatTime(timestamp)}
-                </button>
-                {(() => {
-                    switch (activeItem.type) {
-                        case 'Scene':
-                            return <p className="text-muted-foreground text-sm">{(activeItem.data as Scene).description}</p>;
-                        case 'Transcript':
-                            return <p className="text-muted-foreground text-sm">{(activeItem.data as TranscriptItem).text}</p>;
-                        case 'Object':
-                            return <p className="text-muted-foreground text-sm">{(activeItem.data as TrackedObject).name}</p>;
-                        default:
-                            return null;
-                    }
-                })()}
-            </div>
-        );
+        switch (activeItem.type) {
+            case 'Scene':
+                return <p className="text-gray-600">{(activeItem.data as Scene).description}</p>;
+            case 'Transcript':
+                return <p className="text-gray-600">{(activeItem.data as TranscriptItem).text}</p>;
+            case 'Object':
+                return <p className="text-gray-600">{(activeItem.data as TrackedObject).name}</p>;
+            default:
+                return null;
+        }
     };
 
     return (
         <div className="flex flex-col gap-2">
-            <div className="flex border-b border-border">
+            <div className="flex border-b border-gray-200">
                 {analysisItems.map(item => (
                     <button
                         key={item.type}
@@ -114,8 +74,8 @@ const CitationPopoverContent: React.FC<{
                         className={cn(
                             'px-3 py-1 text-xs font-medium -mb-px border-b-2 focus:outline-none',
                             activeTab === item.type
-                                ? 'border-primary text-primary'
-                                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+                                ? 'border-blue-500 text-blue-600'
+                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                         )}
                     >
                         {item.type}
@@ -131,16 +91,16 @@ const CitationPopoverContent: React.FC<{
 
 
 const AIMessage: React.FC<{
-    content: AssistantMessageContent,
-    onTimestampClick: (time: number, typeHint?: string) => void,
-    scenes: Scene[],
-    transcripts: TranscriptItem[],
-    objects: TrackedObject[]
+  content: AssistantMessageContent,
+  onTimestampClick: (time: number, typeHint?: string) => void,
+  scenes: Scene[],
+  transcripts: TranscriptItem[],
+  objects: TrackedObject[]
 }> = ({ content, onTimestampClick, scenes, transcripts, objects }) => {
-
+    
     const findAllAnalysisItems = (time: number) => {
         const items: { type: string; data: Scene | TranscriptItem | TrackedObject }[] = [];
-
+        
         const scene = scenes.find(s => s.timestamp === time);
         if (scene) items.push({ type: 'Scene', data: scene });
 
@@ -153,126 +113,71 @@ const AIMessage: React.FC<{
         return items;
     };
 
-    // Create timestamp button component
-    const TimestampButton: React.FC<{ timeInSeconds: number; displayText: string; typeHint?: string }> = ({ timeInSeconds, displayText, typeHint }) => {
-        const analysisItems = findAllAnalysisItems(timeInSeconds);
-
-        return (
-            <Popover>
-                <PopoverTrigger asChild>
-                    <button
-                        className="inline-flex items-center align-baseline py-0.5 px-1.5 mx-1 rounded-md text-sm font-mono border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 cursor-pointer transition-colors"
-                    >
-                        {displayText}
-                    </button>
-                </PopoverTrigger>
-                {analysisItems.length > 0 && (
-                    <PopoverContent className="w-96 p-4 bg-card shadow-xl rounded-lg border border-border">
-                        <CitationPopoverContent
-                            analysisItems={analysisItems}
-                            onTimestampClick={onTimestampClick}
-                        />
-                    </PopoverContent>
-                )}
-            </Popover>
-        );
-    };
-
-    // Process content and render with timestamps
-    const renderContentWithTimestamps = () => {
+    const parsedContent = useMemo(() => {
         if (!content.text) return null;
+
+        const parts = content.text.split(/(\[\d{1,2}:\d{2}\]|\[\w+\s?\w*\]\s?at\s?\[\d{1,2}:\d{2}\])/g);
+        const fullTimestampRegex = /\[(\w+\s?\w*)\]\s?at\s?\[(\d{1,2}:\d{2})\]/; // e.g., [Antique Compass] at [01:24]
+        const simpleTimestampRegex = /^\[(\d{1,2}:\d{2})\]$/; // e.g., [01:23]
 
         const parseTimestampString = (ts: string): number => {
             const [minutes, seconds] = ts.split(':').map(Number);
             return (minutes || 0) * 60 + (seconds || 0);
         };
+        
+        return parts.filter(Boolean).map((part, index) => {
+            let timeInSeconds: number | null = null;
+            let displayPart = part;
+            let typeHint: string | undefined = undefined;
 
-        // Simple regex to find timestamps like [00:11], [01:24], etc.
-        const timestampRegex = /\[(\d{1,2}:\d{2})\]/g;
-        const parts = content.text.split(timestampRegex);
+            const fullMatch = part.match(fullTimestampRegex);
+            const simpleMatch = part.match(simpleTimestampRegex);
 
-        const result = [];
-        for (let i = 0; i < parts.length; i++) {
-            if (i % 2 === 0) {
-                // Regular text part
-                if (parts[i].trim()) {
-                    result.push(
-                        <ReactMarkdown key={`text-${i}`} components={{
-                            p: ({ children }: any) => <p className="mb-2 last:mb-0">{children}</p>,
-                            strong: ({ children }: any) => <strong className="font-semibold text-foreground">{children}</strong>,
-                            em: ({ children }: any) => <em className="italic text-muted-foreground">{children}</em>,
-                            code: ({ children }: any) => <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono text-foreground">{children}</code>,
-                            pre: ({ children }: any) => <pre className="bg-muted p-3 rounded-lg overflow-x-auto my-2">{children}</pre>,
-                            ul: ({ children }: any) => <ul className="list-disc list-inside my-2 space-y-1">{children}</ul>,
-                            ol: ({ children }: any) => <ol className="list-decimal list-inside my-2 space-y-1">{children}</ol>,
-                            li: ({ children }: any) => <li className="text-foreground">{children}</li>,
-                            h1: ({ children }: any) => <h1 className="text-xl font-bold mt-4 mb-2 text-foreground">{children}</h1>,
-                            h2: ({ children }: any) => <h2 className="text-lg font-semibold mt-3 mb-2 text-foreground">{children}</h2>,
-                            h3: ({ children }: any) => <h3 className="text-base font-medium mt-2 mb-1 text-foreground">{children}</h3>,
-                            blockquote: ({ children }: any) => <blockquote className="border-l-4 border-primary/30 pl-4 my-2 text-muted-foreground italic">{children}</blockquote>,
-                            a: ({ children, href }: any) => <a href={href} className="text-primary hover:text-primary/80 underline" target="_blank" rel="noopener noreferrer">{children}</a>,
-                            hr: () => <hr className="my-4 border-border" />,
-                        }}>
-                            {parts[i]}
-                        </ReactMarkdown>
-                    );
-                }
-            } else {
-                // Timestamp part
-                const timeStr = parts[i];
-                const timeInSeconds = parseTimestampString(timeStr);
+            if (fullMatch) {
+                timeInSeconds = parseTimestampString(fullMatch[2]);
+                displayPart = `[${fullMatch[1]}]`;
+                typeHint = 'object';
+            } else if (simpleMatch) {
+                timeInSeconds = parseTimestampString(simpleMatch[1]);
+                displayPart = `[${simpleMatch[1]}]`;
+            }
 
-                // Try to determine the type based on surrounding context
-                let typeHint: string | undefined = undefined;
-                const prevText = parts[i - 1]?.toLowerCase() || '';
-                const nextText = parts[i + 1]?.toLowerCase() || '';
-                const contextText = (prevText + ' ' + nextText).toLowerCase();
-
-                // Look for transcript/dialogue keywords
-                if (contextText.includes('transcript') || contextText.includes('dialogue') ||
-                    contextText.includes('says') || contextText.includes('speaks') ||
-                    contextText.includes('conversation') || contextText.includes('talking') ||
-                    contextText.includes('voice') || contextText.includes('audio') ||
-                    contextText.includes('speech') || contextText.includes('words')) {
-                    typeHint = 'transcription';
-                }
-                // Look for scene keywords
-                else if (contextText.includes('scene') || contextText.includes('appears') ||
-                    contextText.includes('shows') || contextText.includes('visual') ||
-                    contextText.includes('frame') || contextText.includes('shot')) {
-                    typeHint = 'scene';
-                }
-                // Look for object keywords
-                else if (contextText.includes('object') || contextText.includes('item') ||
-                    contextText.includes('detected') || contextText.includes('identified') ||
-                    contextText.includes('found') || contextText.includes('visible')) {
-                    typeHint = 'object';
-                }
-
-
-
-                result.push(
-                    <TimestampButton
-                        key={`timestamp-${i}`}
-                        timeInSeconds={timeInSeconds}
-                        displayText={`[${timeStr}]`}
-                        typeHint={typeHint}
-                    />
+            if (timeInSeconds !== null) {
+                const analysisItems = findAllAnalysisItems(timeInSeconds);
+                const finalTime = timeInSeconds;
+                
+                return (
+                    <Popover key={index}>
+                        <PopoverTrigger asChild>
+                             <Button
+                                variant="outline"
+                                onClick={() => onTimestampClick(finalTime, typeHint)}
+                                className="inline-block h-auto align-baseline py-0.5 px-1.5 rounded-md text-sm font-mono border-blue-300 bg-blue-100 text-blue-800 hover:bg-blue-200 hover:text-blue-900"
+                            >
+                                {displayPart}
+                            </Button>
+                        </PopoverTrigger>
+                        {analysisItems.length > 0 && (
+                            <PopoverContent className="w-64 text-sm p-2 bg-white shadow-lg rounded-lg border z-20">
+                                <CitationPopoverContent analysisItems={analysisItems} />
+                            </PopoverContent>
+                        )}
+                    </Popover>
                 );
             }
-        }
+            return <React.Fragment key={index}>{part.replace(fullTimestampRegex, '')}</React.Fragment>;
+        });
+    }, [content.text, onTimestampClick, scenes, transcripts, objects]);
 
-        return result;
-    };
 
     return (
-        <div className="flex items-start gap-4">
-            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-                <AssistantIcon className="h-4 w-4 text-white" />
+        <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 w-8 h-8 rounded-full border bg-white flex items-center justify-center">
+                <AssistantIcon className="h-5 w-5 text-gray-600" />
             </div>
-            <div className="flex-1 space-y-2 min-w-0">
-                <div className="assistant-message text-foreground max-w-full overflow-hidden prose prose-sm leading-relaxed">
-                    {renderContentWithTimestamps()}
+            <div className="flex-1 space-y-2">
+                <div className="rounded-2xl bg-gray-100 p-3 text-sm text-gray-800 shadow-sm max-w-3xl">
+                    <p className="leading-relaxed">{parsedContent}</p>
                 </div>
             </div>
         </div>
@@ -282,11 +187,11 @@ const AIMessage: React.FC<{
 const UserMessageBubble: React.FC<{ content: string }> = ({ content }) => {
     return (
         <div className="flex items-start justify-end gap-3">
-            <div className="rounded-2xl bg-secondary p-3 text-sm font-medium text-secondary-foreground max-w-lg">
+            <div className="rounded-2xl bg-gray-900 p-3 text-sm font-medium text-white max-w-lg">
                 <p>{content}</p>
             </div>
-            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-card border flex items-center justify-center">
-                <UserIcon className="h-5 w-5 text-muted-foreground" />
+            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white border flex items-center justify-center">
+                <UserIcon className="h-5 w-5 text-gray-600" />
             </div>
         </div>
     );
@@ -302,7 +207,6 @@ interface VideoChatAreaProps {
     transcripts: TranscriptItem[];
     objects: TrackedObject[];
     onTimeUpdate: (time: number) => void;
-    onVideoDurationChange: (duration: number) => void;
     videoSrc: string | null;
     generatedVideoSrc: string | null;
     onVideoUpload: (file: File) => void;
@@ -313,117 +217,76 @@ interface VideoChatAreaProps {
     primaryVideoRef: React.RefObject<HTMLVideoElement>;
     syncMode: 'none' | 'video';
     onSyncChange: () => void;
-    onVideoGenerate?: (model: string, prompt: string, settings: any) => void;
-    videoSettings: {
-        playbackSpeed: number;
-        trimStart: number;
-        trimEnd: number;
-        syncMode: 'video' | 'none';
-        frameMode: boolean;
-        videoDuration: number;
-    };
-    generationSettings: {
-        model: 'veo3' | 'sora2';
-        frameRange: { start: number; end: number; duration: number };
-        videoName: string;
-    };
-    onPlaybackSpeedChange: (speed: number) => void;
-    onTrimRangeChange: (start: number, end: number) => void;
-    onSyncModeChange: (mode: 'video' | 'none') => void;
-    onFrameModeChange: (enabled: boolean) => void;
-    onGenerationModelChange: (model: 'veo3' | 'sora2') => void;
-    onGenerationFrameRangeChange: (start: number, end: number) => void;
-    onGenerationVideoNameChange: (name: string) => void;
 }
 
-const VideoChatArea: React.FC<VideoChatAreaProps> = ({
-    jumpToTimestamp,
-    seekTime,
-    onSeeked,
-    scenes,
-    transcripts,
-    objects,
-    onTimeUpdate,
-    onVideoDurationChange,
-    videoSrc,
-    generatedVideoSrc,
-    onVideoUpload,
-    onAnalyze,
-    isAnalyzing,
-    messages,
-    onSendMessage,
-    primaryVideoRef,
-    syncMode,
-    onSyncChange,
-    onVideoGenerate,
-    videoSettings,
-    generationSettings,
-    onPlaybackSpeedChange,
-    onTrimRangeChange,
-    onSyncModeChange,
-    onFrameModeChange,
-    onGenerationModelChange,
-    onGenerationFrameRangeChange,
-    onGenerationVideoNameChange
-}) => {
+const VideoChatArea: React.FC<VideoChatAreaProps> = ({ jumpToTimestamp, seekTime, onSeeked, scenes, transcripts, objects, onTimeUpdate, videoSrc, generatedVideoSrc, onVideoUpload, onAnalyze, isAnalyzing, messages, onSendMessage, primaryVideoRef, syncMode, onSyncChange }) => {
     return (
-        <div className="flex-1 flex flex-col p-4 gap-4 min-w-0 relative">
+        <div className="flex-1 flex flex-col p-4 gap-4 min-w-0">
             {/* Video Players */}
             <div className="flex gap-4">
-                <div className="flex-1 aspect-video rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
-                    <VideoPlayerPro
+                <div className="flex-1 aspect-video">
+                    <VideoPlayerPro 
                         ref={primaryVideoRef}
-                        title="Upload a video to begin"
+                        title="Upload a video to begin" 
                         src={videoSrc}
                         seekToTime={seekTime}
                         onSeeked={onSeeked}
                         onTimeUpdate={onTimeUpdate}
-                        onDurationChange={onVideoDurationChange}
                         activeSyncMode={syncMode}
                         onSyncChange={onSyncChange}
-                        onSceneTrim={onTrimRangeChange}
-                        isGeneratedVideo={false}
                     />
                 </div>
-                <div className="flex-1 aspect-video rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
-                    <VideoPlayerPro
-                        title="Generated Video"
+                <div className="flex-1 aspect-video">
+                    <VideoPlayerPro 
+                        title="Generated Video" 
                         src={generatedVideoSrc}
                         syncMaster={syncMode === 'video' ? primaryVideoRef : null}
                         forceMute={syncMode === 'video'}
-                        onSceneTrim={(startTime, endTime) => {
-                            console.log('Generation range selected:', { startTime, endTime });
-                            // TODO: Handle generation range selection
-                        }}
-                        isGeneratedVideo={true}
                     />
                 </div>
             </div>
 
-            {/* Messages Area with invisible scrollbar and fixed height */}
-            <div className="flex flex-col h-[32rem]">
-                <div className="flex-1 overflow-y-scroll scrollbar-none p-4" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                    <div className="max-w-2xl mx-auto space-y-4">
-                        {messages.map(message => {
-                            switch (message.role) {
-                                case 'user':
-                                    return <UserMessageBubble key={message.id} content={message.content} />;
-                                case 'reasoning':
-                                    return <AIThinkingBlock key={message.id} content={message.content} />;
-                                case 'assistant':
-                                    return <AIMessage
-                                        key={message.id}
-                                        content={message.content}
-                                        onTimestampClick={jumpToTimestamp}
-                                        scenes={scenes}
-                                        transcripts={transcripts}
-                                        objects={objects}
-                                    />;
-                                default:
-                                    return null;
-                            }
-                        })}
-                    </div>
+            {/* Floating Messages Area */}
+            <div className="flex-grow flex flex-col min-h-0">
+                <style>{`
+                    .clean-scrollbar::-webkit-scrollbar {
+                        width: 8px;
+                    }
+                    .clean-scrollbar::-webkit-scrollbar-thumb {
+                        background-color: #d1d5db; /* Tailwind gray-300 */
+                        border-radius: 4px;
+                    }
+                    .clean-scrollbar::-webkit-scrollbar-track {
+                        background-color: transparent;
+                    }
+                    .clean-scrollbar::-webkit-scrollbar-button {
+                        display: none;
+                    }
+                    .clean-scrollbar {
+                        scrollbar-width: thin; /* For Firefox */
+                        scrollbar-color: #d1d5db transparent; /* For Firefox */
+                    }
+                `}</style>
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 clean-scrollbar">
+                    {messages.map(message => {
+                        switch(message.role) {
+                            case 'user':
+                                return <UserMessageBubble key={message.id} content={message.content} />;
+                            case 'reasoning':
+                                return <AIThinkingBlock key={message.id} content={message.content} />;
+                            case 'assistant':
+                                return <AIMessage
+                                    key={message.id}
+                                    content={message.content}
+                                    onTimestampClick={jumpToTimestamp}
+                                    scenes={scenes}
+                                    transcripts={transcripts}
+                                    objects={objects}
+                                />;
+                            default:
+                                return null;
+                        }
+                    })}
                 </div>
                 <div className="p-3 flex justify-center">
                     <AIChatInput
@@ -432,7 +295,6 @@ const VideoChatArea: React.FC<VideoChatAreaProps> = ({
                         isAnalyzing={isAnalyzing}
                         isVideoLoaded={!!videoSrc}
                         onSendMessage={onSendMessage}
-                        onVideoGenerate={onVideoGenerate}
                     />
                 </div>
             </div>

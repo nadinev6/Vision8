@@ -25,12 +25,23 @@ export const SceneExtractor: React.FC<SceneExtractorProps> = ({
   const [timeRange, setTimeRange] = useState<[number, number]>([0, videoDuration]);
   const [error, setError] = useState<string | null>(null);
 
-  // Initialize FFmpeg - disabled for now
+  // Initialize FFmpeg
   useEffect(() => {
-    // Skip FFmpeg loading for now to avoid blocking
-    console.log("FFmpeg loading disabled - scene extraction unavailable");
-    setError('Scene extraction temporarily disabled');
-    setIsReady(false);
+    const loadFFmpeg = async () => {
+      try {
+        if (!ffmpeg.loaded) {
+          await ffmpeg.load({
+            coreURL: await toBlobURL('https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.js', 'text/javascript'),
+          });
+        }
+        setIsReady(true);
+      } catch (err) {
+        setError('Failed to load FFmpeg. Please check your browser compatibility.');
+        console.error('FFmpeg load error:', err);
+      }
+    };
+
+    loadFFmpeg();
   }, []);
 
   // Handle time range selection
@@ -95,12 +106,8 @@ export const SceneExtractor: React.FC<SceneExtractorProps> = ({
     }
   };
 
-  if (error) {
-    return <div className="text-xs text-muted-foreground p-2">{error}</div>;
-  }
-
   if (!isReady) {
-    return <div className="text-xs text-muted-foreground p-2">Loading FFmpeg...</div>;
+    return <div>Loading FFmpeg...</div>;
   }
 
   return (

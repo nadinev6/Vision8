@@ -10,9 +10,9 @@ const Button: React.FC<ButtonProps> = ({ className, variant = 'default', size = 
   const baseClasses = "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none";
 
   const variantClasses = {
-    default: "bg-primary text-primary-foreground hover:bg-primary/90",
-    ghost: "hover:bg-accent hover:text-accent-foreground",
-    outline: "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
+    default: "bg-gray-900 text-white hover:bg-gray-800",
+    ghost: "hover:bg-gray-100 hover:text-gray-900",
+    outline: "border border-gray-200 bg-transparent hover:bg-gray-100",
   };
 
   const sizeClasses = {

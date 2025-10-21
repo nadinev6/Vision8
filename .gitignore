@@ -114,9 +114,3 @@ Thumbs.db
 .DS_Store?
 ehthumbs.db
 .cache/
-
-# Test files
-test-*.js
-test-*.ts
-test-*.jsx
-test-*.tsx
