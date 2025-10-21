@@ -1,67 +1,68 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: [
+    darkMode: ["class"],
+    content: [
     "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
     "./components/**/*.{js,ts,jsx,tsx}",
+    "./*.{js,ts,jsx,tsx}",
+    "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
-    extend: {
-      colors: {
-        border: 'hsla(var(--border))',
-        input: 'hsla(var(--input))',
-        ring: 'hsla(var(--ring))',
-        background: 'hsla(var(--background))',
-        foreground: 'hsla(var(--foreground))',
-        primary: {
-          DEFAULT: 'hsla(var(--primary))',
-          foreground: 'hsla(var(--primary-foreground))',
-        },
-        secondary: {
-          DEFAULT: 'hsla(var(--secondary))',
-          foreground: 'hsla(var(--secondary-foreground))',
-        },
-        destructive: {
-          DEFAULT: 'hsla(var(--destructive))',
-          foreground: 'hsla(var(--foreground))',
-        },
-        muted: {
-          DEFAULT: 'hsla(var(--muted))',
-          foreground: 'hsla(var(--muted-foreground))',
-        },
-        accent: {
-          DEFAULT: 'hsla(var(--accent))',
-          foreground: 'hsla(var(--accent-foreground))',
-        },
-        popover: {
-          DEFAULT: 'hsla(var(--popover))',
-          foreground: 'hsla(var(--popover-foreground))',
-        },
-        card: {
-          DEFAULT: 'hsla(var(--card))',
-          foreground: 'hsla(var(--card-foreground))',
-        },
-      },
-      borderRadius: {
-        lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)',
-      },
-      keyframes: {
-        "accordion-down": {
-          from: { height: "0" },
-          to: { height: "var(--radix-accordion-content-height)" },
-        },
-        "accordion-up": {
-          from: { height: "var(--radix-accordion-content-height)" },
-          to: { height: "0" },
-        },
-      },
-      animation: {
-        "accordion-down": "accordion-down 0.2s ease-out",
-        "accordion-up": "accordion-up 0.2s ease-out",
-      },
-    },
+  	extend: {
+  		colors: {
+  			background: 'hsl(var(--background))',
+  			foreground: 'hsl(var(--foreground))',
+  			primary: {
+  				DEFAULT: 'hsl(var(--primary))',
+  				foreground: 'hsl(var(--primary-foreground))'
+  			},
+  			'primary-foreground': 'var(--primary-foreground)',
+  			secondary: {
+  				DEFAULT: 'hsl(var(--secondary))',
+  				foreground: 'hsl(var(--secondary-foreground))'
+  			},
+  			'secondary-foreground': 'var(--secondary-foreground)',
+  			accent: {
+  				DEFAULT: 'hsl(var(--accent))',
+  				foreground: 'hsl(var(--accent-foreground))'
+  			},
+  			'accent-foreground': 'var(--accent-foreground)',
+  			muted: {
+  				DEFAULT: 'hsl(var(--muted))',
+  				foreground: 'hsl(var(--muted-foreground))'
+  			},
+  			'muted-foreground': 'var(--muted-foreground)',
+  			border: 'hsl(var(--border))',
+  			input: 'hsl(var(--input))',
+  			card: {
+  				DEFAULT: 'hsl(var(--card))',
+  				foreground: 'hsl(var(--card-foreground))'
+  			},
+  			'card-foreground': 'var(--card-foreground)',
+  			'panel-bg': 'var(--panel-bg)',
+  			popover: {
+  				DEFAULT: 'hsl(var(--popover))',
+  				foreground: 'hsl(var(--popover-foreground))'
+  			},
+  			destructive: {
+  				DEFAULT: 'hsl(var(--destructive))',
+  				foreground: 'hsl(var(--destructive-foreground))'
+  			},
+  			ring: 'hsl(var(--ring))',
+  			chart: {
+  				'1': 'hsl(var(--chart-1))',
+  				'2': 'hsl(var(--chart-2))',
+  				'3': 'hsl(var(--chart-3))',
+  				'4': 'hsl(var(--chart-4))',
+  				'5': 'hsl(var(--chart-5))'
+  			}
+  		},
+  		borderRadius: {
+  			lg: 'var(--radius)',
+  			md: 'calc(var(--radius) - 2px)',
+  			sm: 'calc(var(--radius) - 4px)'
+  		}
+  	}
   },
-  plugins: [],
+  plugins: [require("tailwindcss-animate")],
 }
