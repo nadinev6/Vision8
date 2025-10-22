@@ -1,13 +1,19 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { User, onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../lib/firebase';
+import { signIn, signUp, logOut, getUserProfile, UserProfile } from '../lib/auth';
 
 interface AuthContextType {
   isAuthenticated: boolean;
-  user: { name: string; email: string } | null;
+  user: User | null;
+  userProfile: UserProfile | null;
   login: (credentials: { email: string; password: string }) => Promise<boolean>;
+  register: (data: { name: string; email: string; password: string }) => Promise<boolean>;
   logout: () => void;
   showLogin: () => void;
   hideLogin: () => void;
   isLoginVisible: boolean;
+  isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -26,48 +32,39 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoginVisible, setIsLoginVisible] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Check for existing session on mount
+  // Listen to Firebase auth state changes
   useEffect(() => {
-    const savedAuth = localStorage.getItem('vision8_auth');
-    if (savedAuth) {
-      try {
-        const authData = JSON.parse(savedAuth);
-        setIsAuthenticated(true);
-        setUser(authData.user);
-      } catch (error) {
-        console.error('Failed to parse saved auth data:', error);
-        localStorage.removeItem('vision8_auth');
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      setUser(firebaseUser);
+      setIsAuthenticated(!!firebaseUser);
+      
+      if (firebaseUser) {
+        // Load user profile from Firestore
+        try {
+          const profile = await getUserProfile(firebaseUser.uid);
+          setUserProfile(profile);
+        } catch (error) {
+          console.error('Error loading user profile:', error);
+        }
+      } else {
+        setUserProfile(null);
       }
-    }
+      
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const login = async (credentials: { email: string; password: string }): Promise<boolean> => {
     try {
-      // Simulate API call - replace with actual authentication
-      console.log('Attempting login with:', credentials.email);
-      
-      // For demo purposes, accept any email/password combination
-      // In production, this would make an API call to your auth service
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate network delay
-      
-      const userData = {
-        name: credentials.email.split('@')[0],
-        email: credentials.email
-      };
-
-      setIsAuthenticated(true);
-      setUser(userData);
+      await signIn(credentials.email, credentials.password);
       setIsLoginVisible(false);
-
-      // Save to localStorage for persistence
-      localStorage.setItem('vision8_auth', JSON.stringify({
-        user: userData,
-        timestamp: Date.now()
-      }));
-
       return true;
     } catch (error) {
       console.error('Login failed:', error);
@@ -75,10 +72,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const logout = () => {
-    setIsAuthenticated(false);
-    setUser(null);
-    localStorage.removeItem('vision8_auth');
+  const register = async (data: { name: string; email: string; password: string }): Promise<boolean> => {
+    try {
+      await signUp(data.name, data.email, data.password);
+      setIsLoginVisible(false);
+      return true;
+    } catch (error) {
+      console.error('Registration failed:', error);
+      return false;
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await logOut();
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
   };
 
   const showLogin = () => {
@@ -92,11 +102,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const value: AuthContextType = {
     isAuthenticated,
     user,
+    userProfile,
     login,
+    register,
     logout,
     showLogin,
     hideLogin,
-    isLoginVisible
+    isLoginVisible,
+    isLoading
   };
 
   return (

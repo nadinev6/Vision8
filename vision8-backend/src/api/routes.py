@@ -8,8 +8,10 @@ functional areas like video processing, search, and generation.
 from fastapi import APIRouter, HTTPException, Depends
 from typing import Dict, Any, List
 import structlog
+from datetime import datetime
 
-from .video_generation_routes import router as generation_router
+from api.video_generation_routes import router as generation_router
+from api.video_analysis_routes import router as analysis_router
 
 logger = structlog.get_logger()
 
@@ -18,6 +20,7 @@ router = APIRouter()
 
 # Include sub-routers
 router.include_router(generation_router, prefix="/video")
+router.include_router(analysis_router, prefix="/video")
 
 # Root API endpoint
 @router.get("/")
@@ -29,11 +32,7 @@ async def api_root() -> Dict[str, str]:
         "message": "Vision8 Backend API",
         "version": "1.0.0",
         "status": "active",
-        "endpoints": {
-            "video_generation": "/api/v1/video/generation/",
-            "health": "/health",
-            "docs": "/api/docs"
-        }
+        "endpoints": "/api/v1/video/generation/, /health, /api/docs"
     }
 
 
@@ -66,20 +65,344 @@ async def api_health() -> Dict[str, Any]:
         }
 
 
-# Placeholder endpoints for future implementation
-@router.get("/video/analyze")
-async def analyze_video_placeholder():
-    """Placeholder for video analysis endpoint."""
-    raise HTTPException(status_code=501, detail="Video analysis endpoint not yet implemented")
+# Test endpoint for Elasticsearch connection
+@router.get("/test/elasticsearch")
+async def test_elasticsearch() -> Dict[str, Any]:
+    """Test Elasticsearch connection and basic functionality."""
+    try:
+        # Import Elasticsearch directly to avoid Redis dependency
+        from elasticsearch import Elasticsearch
+        import os
+        from dotenv import load_dotenv
+        
+        load_dotenv()
+        
+        # Get Elasticsearch configuration
+        elastic_url = os.getenv('ELASTIC_URL')
+        elastic_api_key = os.getenv('ELASTIC_API_KEY')
+        index_name = os.getenv('ELASTIC_INDEX', 'scene_segments')
+        
+        if not elastic_url or not elastic_api_key:
+            return {
+                "status": "error",
+                "error": "ELASTIC_URL and ELASTIC_API_KEY must be configured",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        
+        # Initialize Elasticsearch client
+        es_client = Elasticsearch(
+            elastic_url,
+            api_key=elastic_api_key,
+            verify_certs=True
+        )
+        
+        # Test connection
+        is_connected = es_client.ping()
+        
+        # Get cluster info
+        cluster_info = es_client.info() if is_connected else {}
+        
+        # Check if index exists
+        index_exists = es_client.indices.exists(index=index_name)
+        
+        return {
+            "status": "success",
+            "elasticsearch": {
+                "connected": is_connected,
+                "cluster_name": cluster_info.get("cluster_name", "unknown"),
+                "version": cluster_info.get("version", {}).get("number", "unknown"),
+                "index_name": index_name,
+                "index_exists": index_exists
+            },
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error("elasticsearch_test_failed", error=str(e))
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }
 
 
-@router.get("/search")
-async def search_placeholder():
-    """Placeholder for search endpoint."""
-    raise HTTPException(status_code=501, detail="Search endpoint not yet implemented")
+# Test endpoint for embedding generation
+@router.get("/test/embeddings")
+async def test_embeddings() -> Dict[str, Any]:
+    """Test embedding generation functionality."""
+    try:
+        import requests
+        import os
+        from dotenv import load_dotenv
+        
+        load_dotenv()
+        
+        # Get Gemini configuration
+        gemini_api_key = os.getenv('GEMINI_API_KEY')
+        embedding_url = os.getenv('EMBEDDING_MODEL_URL')
+        
+        if not gemini_api_key or not embedding_url:
+            return {
+                "status": "error",
+                "error": "GEMINI_API_KEY and EMBEDDING_MODEL_URL must be configured",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        
+        # Test text for embedding
+        test_text = "This is a test video scene showing a person walking in a park."
+        
+        # Prepare request
+        headers = {
+            'Content-Type': 'application/json',
+        }
+        
+        payload = {
+            "model": "models/text-embedding-004",
+            "content": {
+                "parts": [{"text": test_text}]
+            }
+        }
+        
+        # Make request to Gemini API
+        response = requests.post(
+            f"{embedding_url}?key={gemini_api_key}",
+            headers=headers,
+            json=payload,
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            embedding = result.get('embedding', {}).get('values', [])
+            
+            return {
+                "status": "success",
+                "embedding": {
+                    "text": test_text,
+                    "dimensions": len(embedding),
+                    "sample_values": embedding[:5] if embedding else [],
+                    "api_response_time": response.elapsed.total_seconds()
+                },
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        else:
+            return {
+                "status": "error",
+                "error": f"API request failed with status {response.status_code}: {response.text}",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        
+    except Exception as e:
+        logger.error("embedding_test_failed", error=str(e))
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }
 
 
-@router.get("/elasticsearch")
-async def elasticsearch_placeholder():
-    """Placeholder for Elasticsearch operations."""
-    raise HTTPException(status_code=501, detail="Elasticsearch endpoints not yet implemented")
+# Test endpoint for LangCache
+@router.get("/test/langcache")
+async def test_langcache() -> Dict[str, Any]:
+    """Test LangCache connection and embedding caching."""
+    try:
+        from services.langcache_service import LangCacheService
+        
+        # Initialize LangCache service
+        cache_service = LangCacheService()
+        
+        # Test text
+        test_text = "This is a test for embedding caching with LangCache."
+        
+        # Get cache stats
+        stats = cache_service.get_cache_stats()
+        
+        # Test cache miss (should return None for new text)
+        cached_result = cache_service.get_cached_embedding(test_text)
+        
+        return {
+            "status": "success",
+            "langcache": {
+                "api_connected": True,
+                "model": cache_service.model,
+                "test_text": test_text,
+                "cache_hit": cached_result is not None,
+                "cached_dimensions": len(cached_result) if cached_result else None,
+                "stats": stats
+            },
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error("langcache_test_failed", error=str(e))
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+
+# Comprehensive integration test endpoint
+@router.get("/test/integration")
+async def test_integration() -> Dict[str, Any]:
+    """Test all services integration - Elasticsearch, Embeddings, and LangCache."""
+    results = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "services": {}
+    }
+    
+    # Test Embeddings
+    try:
+        import requests
+        import os
+        from dotenv import load_dotenv
+        
+        load_dotenv()
+        
+        gemini_api_key = os.getenv('GEMINI_API_KEY')
+        embedding_url = os.getenv('EMBEDDING_MODEL_URL')
+        
+        if gemini_api_key and embedding_url:
+            test_text = "A person walking through a sunny park with trees."
+            
+            headers = {'Content-Type': 'application/json'}
+            payload = {
+                "model": "models/text-embedding-004",
+                "content": {"parts": [{"text": test_text}]}
+            }
+            
+            response = requests.post(
+                f"{embedding_url}?key={gemini_api_key}",
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                embedding = result.get('embedding', {}).get('values', [])
+                results["services"]["embeddings"] = {
+                    "status": "success",
+                    "dimensions": len(embedding),
+                    "sample": embedding[:3] if embedding else []
+                }
+            else:
+                results["services"]["embeddings"] = {
+                    "status": "error",
+                    "error": f"API error: {response.status_code}"
+                }
+        else:
+            results["services"]["embeddings"] = {
+                "status": "error",
+                "error": "Missing API configuration"
+            }
+    except Exception as e:
+        results["services"]["embeddings"] = {
+            "status": "error",
+            "error": str(e)
+        }
+    
+    # Test LangCache
+    try:
+        from services.langcache_service import LangCacheService
+        
+        cache_service = LangCacheService()
+        test_text = "Integration test for LangCache embedding storage."
+        
+        # Try to get from cache
+        cached = cache_service.get_cached_embedding(test_text)
+        
+        results["services"]["langcache"] = {
+            "status": "success",
+            "model": cache_service.model,
+            "cache_hit": cached is not None,
+            "cached_dimensions": len(cached) if cached else None
+        }
+        
+        # If we have embeddings working, try to cache one
+        if results["services"]["embeddings"]["status"] == "success":
+            sample_embedding = [0.1] * 768  # Mock embedding for testing
+            cache_success = cache_service.cache_embedding(test_text, sample_embedding)
+            results["services"]["langcache"]["cache_write"] = cache_success
+            
+    except Exception as e:
+        results["services"]["langcache"] = {
+            "status": "error",
+            "error": str(e)
+        }
+    
+    # Test Elasticsearch with detailed debugging
+    try:
+        from elasticsearch import Elasticsearch
+        import os
+        
+        elastic_url = os.getenv('ELASTIC_URL')
+        elastic_api_key = os.getenv('ELASTIC_API_KEY')
+        
+        results["services"]["elasticsearch"] = {
+            "url": elastic_url,
+            "has_api_key": bool(elastic_api_key)
+        }
+        
+        if elastic_url and elastic_api_key:
+            # Try different URL formats
+            urls_to_try = [
+                elastic_url,
+                elastic_url.replace(':443', ''),
+                elastic_url.replace('https://', '').replace(':443', '')
+            ]
+            
+            for url in urls_to_try:
+                try:
+                    if not url.startswith('https://'):
+                        url = f"https://{url}"
+                    
+                    es_client = Elasticsearch(
+                        url,
+                        api_key=elastic_api_key,
+                        verify_certs=True,
+                        timeout=10
+                    )
+                    
+                    if es_client.ping():
+                        cluster_info = es_client.info()
+                        results["services"]["elasticsearch"].update({
+                            "status": "success",
+                            "working_url": url,
+                            "cluster_name": cluster_info.get("cluster_name"),
+                            "version": cluster_info.get("version", {}).get("number")
+                        })
+                        break
+                        
+                except Exception as url_error:
+                    results["services"]["elasticsearch"][f"error_{url}"] = str(url_error)
+            
+            if "status" not in results["services"]["elasticsearch"]:
+                results["services"]["elasticsearch"]["status"] = "error"
+                results["services"]["elasticsearch"]["error"] = "All URL formats failed"
+        else:
+            results["services"]["elasticsearch"]["status"] = "error"
+            results["services"]["elasticsearch"]["error"] = "Missing configuration"
+            
+    except Exception as e:
+        results["services"]["elasticsearch"] = {
+            "status": "error",
+            "error": str(e)
+        }
+    
+    # Overall status
+    all_services = [results["services"].get(svc, {}).get("status") for svc in ["embeddings", "langcache", "elasticsearch"]]
+    if all(status == "success" for status in all_services):
+        results["overall_status"] = "all_systems_operational"
+    elif any(status == "success" for status in all_services):
+        results["overall_status"] = "partial_systems_operational"
+    else:
+        results["overall_status"] = "systems_down"
+    
+    return results
+
+# Real endpoints are now available in the analysis router:
+# - POST /api/v1/video/analysis/upload - Upload and analyze videos
+# - GET /api/v1/video/analysis/search - Search video content  
+# - GET /api/v1/video/analysis/elasticsearch/status - Check Elasticsearch status
+# - DELETE /api/v1/video/analysis/video/{video_id} - Delete video data

@@ -81,7 +81,7 @@ const LoginModal: React.FC = () => {
         {/* Header */}
         <div className="text-center mb-8">
           <h2 className="text-2xl font-bold mb-2 text-foreground">
-            Welcome to Vision 8
+            Welcome to VISION 8
           </h2>
           <p className="text-muted-foreground">
             Sign in to access your video intelligence platform
@@ -166,20 +166,23 @@ const LoginModal: React.FC = () => {
           </button>
         </form>
 
-        {/* Demo Notice */}
+        {/* Demo Notice 
         <div className="mt-6 p-4 rounded-lg bg-muted/50 border border-border/50">
           <p className="text-xs text-center text-muted-foreground">
             <strong>Demo Mode:</strong> Use any email and password to sign in
           </p>
-        </div>
+        </div> */}
 
         {/* Footer */}
         <div className="mt-6 text-center">
           <p className="text-sm text-muted-foreground">
             Don't have an account?{' '}
-            <button className="hover:underline font-medium transition-colors duration-200 text-primary hover:text-primary/80">
+            <a
+              href="mailto:nadine@techie.com?subject=Vision 8 Access Request&body=Hi, I would like to request access to Vision 8. Please let me know the next steps."
+              className="hover:underline font-medium transition-colors duration-200 text-primary hover:text-primary/80"
+            >
               Contact us for access
-            </button>
+            </a>
           </p>
         </div>
       </div>

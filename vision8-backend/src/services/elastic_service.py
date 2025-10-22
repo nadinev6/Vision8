@@ -2,13 +2,13 @@ from typing import Dict, List, Optional
 import os
 import structlog
 from elasticsearch import Elasticsearch, helpers
-from elasticsearch.exceptions import ElasticsearchException
+from elasticsearch.exceptions import ApiError, TransportError
 import requests
 from tenacity import retry, stop_after_attempt, wait_exponential
 from datetime import datetime
 import sys
 from dotenv import load_dotenv
-from .cache_service import CacheService
+from .langcache_service import LangCacheService
 
 # Configure logging
 logger = structlog.get_logger()
@@ -31,7 +31,7 @@ class ElasticService:
             verify_certs=True
         )
         self.index_name = os.getenv('ELASTIC_INDEX', 'scene_segments')
-        self.cache_service = CacheService()
+        self.cache_service = LangCacheService()
         
         # Verify connection
         if not self.es_client.ping():
@@ -107,7 +107,7 @@ class ElasticService:
                 )
                 logger.info("index_created", index=self.index_name)
 
-        except ElasticsearchException as e:
+        except (ApiError, TransportError) as e:
             logger.error("index_creation_failed",
                         index=self.index_name,
                         error=str(e))
@@ -314,7 +314,7 @@ class ElasticService:
 
             return success, failed
 
-        except ElasticsearchException as e:
+        except (ApiError, TransportError) as e:
             logger.error("bulk_indexing_failed", error=str(e))
             raise
 

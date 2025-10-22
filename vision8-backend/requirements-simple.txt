@@ -1,0 +1,21 @@
+# Essential dependencies for running the backend
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+python-dotenv==1.0.0
+
+# HTTP and API Clients
+requests==2.31.0
+httpx==0.25.0
+
+# Data Processing (compatible versions)
+numpy>=1.24.0
+pandas>=2.0.0
+
+# Pydantic (compatible version)
+pydantic>=2.0.0,<2.4.0
+
+# Utilities
+structlog==23.2.0
+tenacity==8.2.3
+cachetools==5.3.1

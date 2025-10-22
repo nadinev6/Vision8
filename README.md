@@ -13,6 +13,7 @@
   <a href="https://fastapi.tiangolo.com/" target="_blank"><img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI"></a>
   <a href="https://www.elastic.co/elasticsearch/" target="_blank"><img src="https://img.shields.io/badge/Elasticsearch-005571?style=for-the-badge&logo=elasticsearch&logoColor=white" alt="Elasticsearch"></a>
   <a href="https://redis.io/" target="_blank"><img src="https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white" alt="Redis"></a>
+  <a href="https://firebase.google.com/" target="_blank"><img src="https://img.shields.io/badge/Firebase-FFCA28?style=for-the-badge&logo=firebase&logoColor=black" alt="Firebase"></a>
 </p>
 
 ## Table of Contents
@@ -43,16 +44,21 @@ Vision 8 is engineered as a foundational platform for high-fidelity video-to-vid
 -   **🤖 AI-Powered Video Analysis**: Utilizes `gemini-2.5-flash` for fast, comprehensive video deconstruction into scenes, transcripts, and tracked objects.
 -   **💬 Conversational Intelligence (RAG)**: An integrated chat interface provides intelligent, grounded answers using a Retrieval-Augmented Generation (RAG) pipeline powered by a FastAPI backend, Elasticsearch for vector search, and Gemini Function Calling.
 -   **🔄 Synchronized Playback**: Clicking any inline citation in the chat automatically navigates the video player to the exact moment referenced, creating a seamless link between conversation, data, and playback.
+-   **� Usera Authentication**: Secure user authentication and session management powered by Firebase Auth.
+-   **☁️ Cloud Storage**: Seamless video upload and storage using Firebase Storage with automatic file management.
+-   **📊 Analysis History**: Persistent storage of video analysis results and chat conversations tied to user accounts.
 -   **🖥️ Advanced UI/UX**: Features a fully resizable layout, a dual-player setup for comparison, and frame-accurate playback controls.
 
 ## 🏗️ Architecture
 
 Vision 8 is a full-stack application with a React frontend and a Python (FastAPI) backend.
 
-1.  **Video Ingestion**: The user uploads a video through the client. The frontend extracts representative frames and sends them to the backend.
-2.  **AI Deconstruction**: The backend's `metadata_generator` service uses the Gemini API to analyze the frames and generate structured metadata (scenes, descriptions, objects).
-3.  **Vectorization & Indexing**: The `elastic_service` generates vector embeddings for the textual metadata and ingests the complete document into an Elasticsearch index. Vector embeddings are cached in Redis by the `cache_service` to reduce latency and cost.
-4.  **Conversational RAG**: When the user asks a question, the frontend calls the backend's `/chat` endpoint. The `conversation_handler` orchestrates the RAG pipeline:
+1.  **User Authentication**: Users sign in through Firebase Auth, which manages sessions and user state across the application.
+2.  **Video Ingestion**: Authenticated users upload videos through the client. Videos are stored in Firebase Storage, and the frontend extracts representative frames to send to the backend.
+3.  **AI Deconstruction**: The backend's `metadata_generator` service uses the Gemini API to analyze the frames and generate structured metadata (scenes, descriptions, objects).
+4.  **Vectorization & Indexing**: The `elastic_service` generates vector embeddings for the textual metadata and ingests the complete document into an Elasticsearch index. Vector embeddings are cached in Redis by the `cache_service` to reduce latency and cost.
+5.  **Persistent Storage**: Analysis results and chat conversations are stored in Firebase, tied to the user's account for future access.
+6.  **Conversational RAG**: When the user asks a question, the frontend calls the backend's `/chat` endpoint. The `conversation_handler` orchestrates the RAG pipeline:
     *   It generates a vector for the user's query.
     *   It performs a semantic search against Elasticsearch to retrieve relevant video segments.
     *   It passes the retrieved context and the original query to the Gemini model to generate a grounded, accurate answer.
@@ -67,6 +73,8 @@ Vision 8 is a full-stack application with a React frontend and a Python (FastAPI
 | **AI/LLM** | Google Gemini API (`gemini-2.5-flash`, `text-embedding-004`) |
 | **Database** | Elasticsearch (Vector Search, Metadata Storage) |
 | **Cache** | Redis (Vector Embedding Cache) |
+| **Authentication** | Firebase Auth (User Management, Sessions) |
+| **Storage** | Firebase Storage (Video Files, User Data) |
 | **Deployment** | Designed for serverless environments like Google Cloud Run |
 
 ## 🛠️ Getting Started
@@ -80,6 +88,7 @@ This project consists of a React frontend and a FastAPI backend.
 -   Access to an Elasticsearch cluster
 -   Access to a Redis instance
 -   A Google Gemini API Key
+-   Firebase project with Authentication and Storage enabled
 
 ### Backend Setup
 
@@ -120,10 +129,16 @@ This project consists of a React frontend and a FastAPI backend.
     npm install
     ```
 
-3.  **Set up your Gemini API Key:**
-    Create a `.env` file in the root directory and add your Gemini API key. This is used for the initial client-side analysis.
+3.  **Configure environment variables:**
+    Create a `.env` file in the root directory and add your API keys and Firebase configuration:
     ```
     GEMINI_API_KEY=your_google_gemini_api_key
+    NEXT_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
+    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+    NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
     ```
 
 4.  **Run the frontend development server:**

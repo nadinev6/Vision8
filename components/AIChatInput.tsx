@@ -5,12 +5,12 @@ import VideoGenerationDialog from './VideoGenerationDialog';
 import { hybridSearch } from '../lib/elasticsearch';
 
 const PLACEHOLDERS = [
-  "Search for the specific scene where the Joker gets knocked over",
-  "Find a the scene where Jack says 'I love you'",
-  "How many times does a cat appear in this film?",
-  "Where else does the lady in the red dress appear?",
+  "Generate frames 100 to 200",
+  "Switch to Veo 3 and generate a replacement for the first scene",
+  "Name this video 'Sunset Scene'",
+  "Make the lighting more cinematic and dramatic",
   "How many scenes need to be changed in order to replace the cat?",
-  "Summarize this film focusing on the main characters",
+  "Change the dialogue to 'Hello there!'"
 ];
 
 interface AIChatInputProps {
@@ -128,7 +128,7 @@ const AIChatInput: React.FC<AIChatInputProps> = ({ onVideoUpload, onAnalyze, isA
         if (searchResults[0]) {
           const firstResultTime = searchResults[0].document.start_time_ms / 1000;
           console.log(`Jumping to first result at ${firstResultTime}s`);
-          // You could add a callback here to jump to the timestamp
+        
         }
       } else {
         console.log('No search results found');
