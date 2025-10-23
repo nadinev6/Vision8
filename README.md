@@ -1,4 +1,4 @@
-[![Contributing](https://img.shields.io/badge/Contributions-Welcome-brightgreen.svg)](/CONTRIBUTING.md)[![Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen.svg)](#)[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](#)[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](/LICENSE)
+[![Contributing](https://img.shields.io/badge/Contributions-Welcome-brightgreen.svg)](/CONTRIBUTING.md)[![Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen.svg)](#)[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](#)[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](/LICENSE.txt)
 
 <p align="center">
   <img src="https://github.com/nadinev6/Vision8/blob/afeb0723136b6373fe9ce5bd682d4f06e1d0931a/VISION%208.png" alt="Vision 8 Logo" width="250">
@@ -42,9 +42,10 @@ Vision 8 is engineered as a foundational platform for high-fidelity video-to-vid
 ## ✨ Key Features
 
 -   **🤖 AI-Powered Video Analysis**: Utilizes `gemini-2.5-flash` for fast, comprehensive video deconstruction into scenes, transcripts, and tracked objects.
+-   **🎙️ Professional Audio Transcription**: Enterprise-grade speech recognition powered by **Google Cloud Speech-to-Text** with word-level timestamps, confidence scoring, and intelligent segment processing for production-quality transcripts.
 -   **💬 Conversational Intelligence (RAG)**: An integrated chat interface provides intelligent, grounded answers using a Retrieval-Augmented Generation (RAG) pipeline powered by a FastAPI backend, Elasticsearch for vector search, and Gemini Function Calling.
 -   **🔄 Synchronized Playback**: Clicking any inline citation in the chat automatically navigates the video player to the exact moment referenced, creating a seamless link between conversation, data, and playback.
--   **� Usera Authentication**: Secure user authentication and session management powered by Firebase Auth.
+-   **🔐 User Authentication**: Secure user authentication and session management powered by Firebase Auth.
 -   **☁️ Cloud Storage**: Seamless video upload and storage using Firebase Storage with automatic file management.
 -   **📊 Analysis History**: Persistent storage of video analysis results and chat conversations tied to user accounts.
 -   **🖥️ Advanced UI/UX**: Features a fully resizable layout, a dual-player setup for comparison, and frame-accurate playback controls.
@@ -55,8 +56,8 @@ Vision 8 is a full-stack application with a React frontend and a Python (FastAPI
 
 1.  **User Authentication**: Users sign in through Firebase Auth, which manages sessions and user state across the application.
 2.  **Video Ingestion**: Authenticated users upload videos through the client. Videos are stored in Firebase Storage, and the frontend extracts representative frames to send to the backend.
-3.  **AI Deconstruction**: The backend's `metadata_generator` service uses the Gemini API to analyze the frames and generate structured metadata (scenes, descriptions, objects).
-4.  **Vectorization & Indexing**: The `elastic_service` generates vector embeddings for the textual metadata and ingests the complete document into an Elasticsearch index. Vector embeddings are cached in Redis by the `cache_service` to reduce latency and cost.
+3.  **AI Deconstruction**: The backend's `metadata_generator` service uses the Gemini API to analyze the frames and generate structured metadata (scenes, descriptions, objects). Simultaneously, the `audio_transcription_service` extracts audio and performs high-accuracy speech recognition using Google Cloud Speech-to-Text.
+4.  **Vectorization & Indexing**: The `elastic_service` generates vector embeddings for both visual and audio metadata, creating a unified search index. Enhanced transcription data with word-level timestamps is integrated into Elasticsearch documents. Vector embeddings are cached in Redis by the `cache_service` to reduce latency and cost.
 5.  **Persistent Storage**: Analysis results and chat conversations are stored in Firebase, tied to the user's account for future access.
 6.  **Conversational RAG**: When the user asks a question, the frontend calls the backend's `/chat` endpoint. The `conversation_handler` orchestrates the RAG pipeline:
     *   It generates a vector for the user's query.
@@ -71,7 +72,8 @@ Vision 8 is a full-stack application with a React frontend and a Python (FastAPI
 | **Frontend** | React, TypeScript, Tailwind CSS, Vite |
 | **Backend** | Python, FastAPI, Uvicorn |
 | **AI/LLM** | Google Gemini API (`gemini-2.5-flash`, `text-embedding-004`) |
-| **Database** | Elasticsearch (Vector Search, Metadata Storage) |
+| **Speech Recognition** | Google Cloud Speech-to-Text (Audio Transcription, Word Timestamps) |
+| **Database** | Elasticsearch (Vector Search, Metadata & Transcript Storage) |
 | **Cache** | Redis (Vector Embedding Cache) |
 | **Authentication** | Firebase Auth (User Management, Sessions) |
 | **Storage** | Firebase Storage (Video Files, User Data) |
@@ -109,6 +111,7 @@ This project consists of a React frontend and a FastAPI backend.
     ```
     -   `ELASTIC_URL`, `ELASTIC_API_KEY`, `ELASTIC_INDEX`
     -   `GEMINI_API_KEY`
+    -   `GOOGLE_CLOUD_PROJECT`, `GOOGLE_APPLICATION_CREDENTIALS` (for Speech-to-Text)
     -   `REDIS_URL`, `REDIS_API`
 
 4.  **Run the backend server:**
@@ -159,4 +162,4 @@ Contributions are what make the open-source community such an amazing place to l
 
 ## 📄 License
 
-Distributed under the MIT License. See `LICENSE.txt` for more information. (Note: `LICENSE.txt` file not provided in this project).
+Distributed under the MIT License. See [`LICENSE.txt`](/LICENSE.txt) for more information.

@@ -1,11 +1,11 @@
 import type { HTMLAttributes } from "react"
 
 const SAFARI_WIDTH = 1203
-const SAFARI_HEIGHT = 753
+const SAFARI_HEIGHT = 620
 const SCREEN_X = 1
 const SCREEN_Y = 52
 const SCREEN_WIDTH = 1200
-const SCREEN_HEIGHT = 700
+const SCREEN_HEIGHT = 569
 
 // Calculated percentages
 const LEFT_PCT = (SCREEN_X / SAFARI_WIDTH) * 100
@@ -58,7 +58,7 @@ export function Safari({
           }}
         >
           <video
-            className="block size-full object-cover"
+            className="block size-full object-contain"
             src={videoSrc}
             autoPlay
             loop
@@ -86,7 +86,7 @@ export function Safari({
               <img
                 src={imageSrc}
                 alt=""
-                className="block w-full h-full object-cover"
+                className="block w-full h-full object-contain"
               />
             </div>
           </>

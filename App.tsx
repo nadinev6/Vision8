@@ -9,6 +9,7 @@ import VideoNameDialog from './components/VideoNameDialog';
 import { LogoIcon, UserIcon } from './components/icons';
 import { analyzeVideo, generateChatResponseWithRAG, VideoSettingsCallbacks, GenerationSettingsCallbacks } from './lib/gemini';
 import { getHistory, saveHistory, ChatSession } from './lib/history';
+import { uploadVideo } from './lib/storage';
 import './lib/migrate-to-indexeddb'; // Load IndexedDB utilities
 
 
@@ -20,7 +21,7 @@ const AuthenticatedApp: React.FC = () => {
     const [seekTime, setSeekTime] = useState<number | null>(null);
     const [activeTimestamp, setActiveTimestamp] = useState<number | null>(null);
     const [activeAnalysisTab, setActiveAnalysisTab] = useState('scene');
-    
+
     // State for video player synchronization and settings
     const primaryVideoRef = useRef<HTMLVideoElement>(null);
     const [syncMode, setSyncMode] = useState<'none' | 'video'>('none');
@@ -29,12 +30,12 @@ const AuthenticatedApp: React.FC = () => {
     const [trimEnd, setTrimEnd] = useState(0);
     const [frameMode, setFrameMode] = useState(false);
     const [videoDuration, setVideoDuration] = useState(0);
-    
+
     // Generation settings
     const [generationModel, setGenerationModel] = useState<'veo3' | 'sora2'>('veo3');
     const [generationFrameRange, setGenerationFrameRange] = useState({ start: 0, end: 100, duration: 3.33 });
     const [generationVideoName, setGenerationVideoName] = useState('Current Video');
-    
+
     const handleSyncChange = () => { setSyncMode(prev => prev === 'video' ? 'none' : 'video'); };
 
     // State for video and analysis
@@ -45,7 +46,7 @@ const AuthenticatedApp: React.FC = () => {
     const [analysisError, setAnalysisError] = useState<string | null>(null);
     const [showVideoNameDialog, setShowVideoNameDialog] = useState(false);
     const [pendingVideoName, setPendingVideoName] = useState('');
-    
+
     // State for history and sessions
     const [history, setHistory] = useState<ChatSession[]>([]);
     const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -94,16 +95,29 @@ const AuthenticatedApp: React.FC = () => {
         }
     }, [videoFile]);
 
-    const handleVideoUpload = (file: File) => {
+    const handleVideoUpload = async (file: File) => {
         console.log("handleVideoUpload called with file:", file.name, file.type, "Size:", file.size);
-        
-        // Check file size (limit to 100MB)
-        if (file.size > 100 * 1024 * 1024) {
-            setAnalysisError("File too large. Please select a video smaller than 100MB.");
+
+        // Check file size (limit to 200MB)
+        if (file.size > 200 * 1024 * 1024) {
+            setAnalysisError("File too large. Please select a video smaller than 200MB.");
             return;
         }
-        
+
         try {
+            let videoUrl: string | undefined;
+            
+            // Upload to Firebase Storage if user is authenticated
+            if (user?.uid) {
+                console.log("Uploading video to Firebase Storage for user:", user.uid);
+                try {
+                    videoUrl = await uploadVideo(file, user.uid, file.name);
+                    console.log("✅ Video uploaded to Firebase Storage:", videoUrl);
+                } catch (uploadError) {
+                    console.warn("Firebase upload failed, continuing with local storage:", uploadError);
+                }
+            }
+
             const newSession: ChatSession = {
                 id: Date.now().toString(),
                 name: file.name,
@@ -113,15 +127,20 @@ const AuthenticatedApp: React.FC = () => {
                 scenes: [], transcripts: [], objects: [],
                 lastTimestamp: 0,
             };
-            
+
             console.log("Creating new session:", newSession.id);
             setHistory(prev => [newSession, ...prev]);
             setCurrentSessionId(newSession.id);
-            
+
             console.log("Setting video file...");
             setVideoFile(file);
             setAnalysisError(null);
             setActiveTimestamp(0);
+            
+            if (videoUrl) {
+                console.log("✅ Video stored in Firebase and available at:", videoUrl);
+            }
+            
             console.log("Video upload process completed successfully for file:", file.name);
         } catch (error) {
             console.error("Error in handleVideoUpload:", error);
@@ -157,7 +176,7 @@ const AuthenticatedApp: React.FC = () => {
         const updatedHistory = history.filter(s => s.id !== sessionId);
         console.log('Updated history:', updatedHistory);
         setHistory(updatedHistory);
-        
+
         // If deleting the active session, switch to another or create new
         if (sessionId === currentSessionId) {
             console.log('Deleting active session, switching...');
@@ -181,7 +200,7 @@ const AuthenticatedApp: React.FC = () => {
         if (typeHint) {
             const hintedCheck = checks.find(c => c.tab === typeHint);
             if (hintedCheck) {
-                 checks.unshift(hintedCheck);
+                checks.unshift(hintedCheck);
             }
         }
         return checks.find(c => c.data.some(c.check))?.tab || null;
@@ -190,7 +209,7 @@ const AuthenticatedApp: React.FC = () => {
     const jumpToTimestamp = useCallback((time: number, typeHint?: string) => {
         setSeekTime(time);
         setActiveTimestamp(time);
-        
+
         // If we have a type hint, use it directly instead of searching
         if (typeHint) {
             // Map common type hints to correct tab names
@@ -208,7 +227,7 @@ const AuthenticatedApp: React.FC = () => {
             const transcript = transcripts.find(t => time >= t.startTime && time <= t.endTime);
             const scene = scenes.find(s => Math.abs(s.timestamp - time) < 1); // Allow 1 second tolerance
             const object = objects.find(o => Math.abs(o.timestamp - time) < 1); // Allow 1 second tolerance
-            
+
             if (transcript) {
                 setActiveAnalysisTab('transcription');
             } else if (scene) {
@@ -226,11 +245,11 @@ const AuthenticatedApp: React.FC = () => {
         if (activeTranscript) {
             setActiveTimestamp(prev => (prev !== activeTranscript.startTime ? activeTranscript.startTime : prev));
         } else {
-             const allEvents = [...scenes.map(s => s.timestamp), ...objects.map(o => o.timestamp)];
-             const lastEvent = allEvents.filter(t => t <= time).sort((a,b) => b-a)[0];
-             if (lastEvent !== undefined) setActiveTimestamp(prev => (prev !== lastEvent ? lastEvent : prev));
+            const allEvents = [...scenes.map(s => s.timestamp), ...objects.map(o => o.timestamp)];
+            const lastEvent = allEvents.filter(t => t <= time).sort((a, b) => b - a)[0];
+            if (lastEvent !== undefined) setActiveTimestamp(prev => (prev !== lastEvent ? lastEvent : prev));
         }
-       
+
         // Update session timestamp throttled by time difference
         if (currentSessionId && Math.abs(time - (currentSession?.lastTimestamp || 0)) > 1) {
             setHistory(prev => prev.map(s => s.id === currentSessionId ? { ...s, lastTimestamp: time } : s));
@@ -243,7 +262,7 @@ const AuthenticatedApp: React.FC = () => {
             setTrimEnd(duration);
         }
     }, [trimEnd]);
-    
+
 
     const handleAnalyze = async () => {
         if (!videoFile || !currentSessionId) {
@@ -259,15 +278,15 @@ const AuthenticatedApp: React.FC = () => {
 
     const handleVideoGenerate = async (model: string, frameData: any) => {
         console.log('🎬 Video-to-video generation requested:', { model, frameData });
-        
+
         // TODO: Implement actual video generation API call
         // This should send the frame data and model selection to the backend
-        const userMessage: UserMessage = { 
-            id: `user-${Date.now()}`, 
-            role: 'user', 
-            content: `Generate video using ${model} from frames ${frameData.startFrame}-${frameData.endFrame}` 
+        const userMessage: UserMessage = {
+            id: `user-${Date.now()}`,
+            role: 'user',
+            content: `Generate video using ${model} from frames ${frameData.startFrame}-${frameData.endFrame}`
         };
-        
+
         const assistantMessage: AssistantMessage = {
             id: `assistant-${Date.now()}`,
             role: 'assistant',
@@ -275,9 +294,9 @@ const AuthenticatedApp: React.FC = () => {
         };
 
         if (currentSessionId) {
-            setHistory(prev => prev.map(s => s.id === currentSessionId ? { 
-                ...s, 
-                messages: [...s.messages, userMessage, assistantMessage] 
+            setHistory(prev => prev.map(s => s.id === currentSessionId ? {
+                ...s,
+                messages: [...s.messages, userMessage, assistantMessage]
             } : s));
         }
     };
@@ -300,7 +319,7 @@ const AuthenticatedApp: React.FC = () => {
                 ]
             }
         };
-        
+
         setHistory(prev => prev.map(s => s.id === currentSessionId ? { ...s, messages: [...s.messages, reasoningMessage] } : s));
         setIsAnalyzing(true);
         setAnalysisError(null);
@@ -313,13 +332,13 @@ const AuthenticatedApp: React.FC = () => {
                 role: 'assistant',
                 content: { text: summaryText }
             };
-            
+
             setHistory(prev => prev.map(s => s.id === currentSessionId ? { ...s, ...result, messages: [...s.messages.filter(m => m.id !== reasoningId), assistantMessage] } : s));
         } catch (error: any) {
             console.error("Video analysis failed:", error);
             const errorMessage = error.message || "Failed to analyze video.";
             setAnalysisError(errorMessage);
-            
+
             const errorAssistantMessage: AssistantMessage = {
                 id: `assistant-error-${Date.now()}`,
                 role: 'assistant',
@@ -330,11 +349,11 @@ const AuthenticatedApp: React.FC = () => {
             setIsAnalyzing(false);
         }
     };
-    
+
     const handleSendMessage = async (content: string) => {
         if (!currentSessionId || !currentSession) return;
         const userMessage: UserMessage = { id: `user-${Date.now()}`, role: 'user', content };
-    
+
         setHistory(prev => prev.map(s => s.id === currentSessionId ? { ...s, messages: [...s.messages, userMessage] } : s));
 
         const reasoningId = `reasoning-${Date.now()}`;
@@ -353,7 +372,7 @@ const AuthenticatedApp: React.FC = () => {
             }
         };
         setHistory(prev => prev.map(s => s.id === currentSessionId ? { ...s, messages: [...s.messages, reasoningMessage] } : s));
-    
+
         try {
             const context = {
                 scenes: currentSession.scenes,
@@ -409,24 +428,24 @@ const AuthenticatedApp: React.FC = () => {
                     setGenerationVideoName(name);
                 }
             };
-    
+
             const assistantText = await generateChatResponseWithRAG(
-                content, 
-                context, 
-                videoSettings, 
-                generationSettings, 
-                settingsCallbacks, 
+                content,
+                context,
+                videoSettings,
+                generationSettings,
+                settingsCallbacks,
                 generationCallbacks
             );
-    
+
             const assistantMessage: AssistantMessage = {
                 id: `assistant-${Date.now()}`,
                 role: 'assistant',
                 content: { text: assistantText }
             };
-            
+
             setHistory(prev => prev.map(s => s.id === currentSessionId ? { ...s, messages: [...s.messages.filter(m => m.id !== reasoningId), assistantMessage] } : s));
-    
+
         } catch (error: any) {
             console.error("Chat response failed:", error);
             const errorMessage = error.message || "Failed to get a response.";
@@ -467,9 +486,9 @@ const AuthenticatedApp: React.FC = () => {
                     <span className="text-sm text-muted-foreground">
                         Welcome, {user?.name}
                     </span>
-                    <button 
+                    <button
                         onClick={logout}
-                        className="p-2 rounded-full hover:bg-accent" 
+                        className="p-2 rounded-full hover:bg-accent"
                         aria-label="User Menu"
                         title="Click to logout"
                     >
@@ -478,16 +497,16 @@ const AuthenticatedApp: React.FC = () => {
                 </div>
             </header>
             <div className="flex flex-1 overflow-hidden">
-                <HistorySidebar 
-                    isHistoryOpen={isHistoryOpen} 
+                <HistorySidebar
+                    isHistoryOpen={isHistoryOpen}
                     toggleHistory={toggleHistory}
                     sessions={history}
                     activeSessionId={currentSessionId}
                     onSelectSession={handleSelectSession}
                     onDeleteSession={handleDeleteSession}
                 />
-                
-                <VideoChatArea 
+
+                <VideoChatArea
                     jumpToTimestamp={jumpToTimestamp}
                     seekTime={seekTime}
                     onSeeked={handleSeeked}
@@ -538,8 +557,8 @@ const AuthenticatedApp: React.FC = () => {
                     title="Resize panel"
                 />
 
-                <AnalysisPanel 
-                    rightPanelWidth={rightPanelWidth} 
+                <AnalysisPanel
+                    rightPanelWidth={rightPanelWidth}
                     scenes={scenes}
                     transcripts={transcripts}
                     objects={objects}

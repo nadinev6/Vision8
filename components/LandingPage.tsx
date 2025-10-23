@@ -227,18 +227,19 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
                 <div className="relative p-1.5 rounded-2xl bg-white/10 backdrop-blur-sm border border-white/20 shadow-2xl">
                   <Safari
                     url="https://vision8-e7683.web.app"
-                    videoSrc="PLACEHOLDER_VIDEO_URL"
-                    className="w-full h-full object-cover"
+                    videoSrc="/src/preview.mp4"
+                    className="w-full h-full object-contain"
                   />
                 </div>
 
                 {/* Overlay Taglines */}
-                <div className="absolute inset-0 flex flex-col lg:flex-row justify-between items-start lg:items-end p-8 lg:p-12 pointer-events-none z-20">
+                <div className="absolute inset-0 flex flex-col lg:flex-row justify-between items-start lg:items-end p-8 lg:p-16 pointer-events-none z-20">
                   {/* Left Aligned Sub-tagline with Message Bubble */}
-                  <div className="lg:w-1/2 pointer-events-auto">
+                  <div className="pointer-events-auto left-0 w-max lg:-ml-48 ">
                     <div className="bg-blue-100 rounded-2xl px-6 py-4 shadow-lg border border-blue-200/30">
-                      <p className="text-xl lg:text-2xl font-normal leading-relaxed text-gray-800">
-                        The conversational engine for video intelligence.
+                      <p className="text-xl lg:text-2xl font-medium leading-relaxed text-gray-800">
+                        The conversational engine
+                        for video intelligence.
                       </p>
                     </div>
                   </div>
@@ -246,7 +247,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
                   {/* Right Aligned Main Tagline with Message Bubble - Moved further right and UP */}
                   <div className="lg:w-2/5 lg:flex lg:justify-end lg:self-center mt-8 lg:-mt-16 pointer-events-auto -mr-12 lg:-mr-24">
                     <div className="bg-blue-100 rounded-2xl px-6 py-4 shadow-lg border border-blue-200/30 lg:text-right">
-                      <p className="text-2xl lg:text-4xl font-medium leading-tight text-gray-800">
+                      <p className="text-2xl lg:text-3xl font-medium leading-tight text-gray-800">
                         The Future of<br />
                         Video Search.
                       </p>
@@ -270,7 +271,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
               <span className="text-sm font-medium text-white/90 hidden sm:inline drop-shadow-sm">Elasticsearch</span>
             </div>
             <div className="flex items-center space-x-2">
-              <img src="/icons/redis.svg" alt="Redis" className="w-8 h-8 drop-shadow-md" />
+              <img src="/icons/redis.svg" alt="Redis Cache" className="w-8 h-8 drop-shadow-md" />
               <span className="text-sm font-medium text-white/90 hidden sm:inline drop-shadow-sm">Redis</span>
             </div>
           </div>
