@@ -38,6 +38,18 @@ class SimpleSettings:
     GEMINI_MODEL_NAME = os.getenv("GEMINI_MODEL_NAME", "gemini-2.5-flash-preview-05-20")
     VECTOR_CACHE_SIZE = int(os.getenv("VECTOR_CACHE_SIZE", 1000))
     VECTOR_CACHE_TTL = int(os.getenv("VECTOR_CACHE_TTL", 3600))
+    
+    # Audio Processing Configuration
+    GOOGLE_CLOUD_PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT")
+    GOOGLE_APPLICATION_CREDENTIALS = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    SPEECH_TO_TEXT_LANGUAGE = os.getenv("SPEECH_TO_TEXT_LANGUAGE", "en-US")
+    SPEECH_TO_TEXT_MODEL = os.getenv("SPEECH_TO_TEXT_MODEL", "latest_long")
+    SPEECH_TO_TEXT_ENABLE_WORD_TIMESTAMPS = os.getenv("SPEECH_TO_TEXT_ENABLE_WORD_TIMESTAMPS", "true").lower() == "true"
+    SPEECH_TO_TEXT_ENABLE_PUNCTUATION = os.getenv("SPEECH_TO_TEXT_ENABLE_PUNCTUATION", "true").lower() == "true"
+    
+    # Audio Processing Directories
+    TEMP_AUDIO_DIR = os.path.join(os.path.dirname(__file__), "..", "temp", "audio")
+    EXTRACTED_AUDIO_DIR = os.path.join(os.path.dirname(__file__), "..", "temp", "extracted_audio")
 
 settings = SimpleSettings()
 
@@ -81,11 +93,34 @@ class ServiceRegistry:
         try:
             logger.info("Initializing application services...")
 
-            # For now, skip service initialization to get the app running
-            # These will be uncommented when the service modules are implemented
-            logger.info("Service initialization skipped for basic startup test")
+            # Initialize Elasticsearch service
+            try:
+                from services.elastic_service import ElasticService
+                self.elasticsearch = ElasticService()
+                logger.info("✅ Elasticsearch service initialized")
+            except Exception as e:
+                logger.error("❌ Failed to initialize Elasticsearch service", error=str(e))
+                self.elasticsearch = None
 
-            logger.info("Mock services initialized successfully")
+            # Initialize Metadata Generator
+            try:
+                from services.metadata_generator import MetadataGenerator
+                self.metadata_generator = MetadataGenerator()
+                logger.info("✅ Metadata generator initialized")
+            except Exception as e:
+                logger.error("❌ Failed to initialize Metadata generator", error=str(e))
+                self.metadata_generator = None
+
+            # Initialize Cache Service
+            try:
+                from services.cache_service import CacheService
+                self.cache_service = CacheService()
+                logger.info("✅ Cache service initialized")
+            except Exception as e:
+                logger.warning("⚠️ Cache service not available, continuing without cache", error=str(e))
+                self.cache_service = None
+
+            logger.info("🎉 Service initialization completed")
 
         except Exception as e:
             logger.error(f"Failed to initialize services: {str(e)}", exc_info=True)
@@ -95,7 +130,24 @@ class ServiceRegistry:
         """Cleanup and shutdown all services."""
         try:
             logger.info("Shutting down application services...")
-            logger.info("All services shut down successfully")
+            
+            # Shutdown cache service
+            if self.cache_service:
+                try:
+                    self.cache_service.close()
+                    logger.info("✅ Cache service shut down")
+                except Exception as e:
+                    logger.error("❌ Cache service shutdown failed", error=str(e))
+            
+            # Shutdown Elasticsearch service
+            if self.elasticsearch:
+                try:
+                    self.elasticsearch.es_client.close()
+                    logger.info("✅ Elasticsearch service shut down")
+                except Exception as e:
+                    logger.error("❌ Elasticsearch service shutdown failed", error=str(e))
+            
+            logger.info("🎉 All services shut down successfully")
 
         except Exception as e:
             logger.error(f"Error during service shutdown: {str(e)}", exc_info=True)
@@ -272,17 +324,32 @@ async def health_check() -> Dict[str, Any]:
     """
     try:
         # Check Elasticsearch connection
-        es_healthy = False  # Temporarily disable to avoid issues during basic testing
+        es_healthy = False
+        if service_registry.elasticsearch:
+            try:
+                es_healthy = service_registry.elasticsearch.es_client.ping()
+            except Exception as e:
+                logger.warning("Elasticsearch ping failed", error=str(e))
+        
+        # Count active services
+        active_services = sum([
+            bool(service_registry.elasticsearch),
+            bool(service_registry.metadata_generator),
+            bool(service_registry.cache_service)
+        ])
+        
+        overall_status = "healthy" if active_services >= 2 else "degraded" if active_services >= 1 else "unhealthy"
         
         return {
-            "status": "healthy" if es_healthy else "degraded",
+            "status": overall_status,
             "version": "1.0.0",
             "services": {
                 "elasticsearch": "connected" if es_healthy else "disconnected",
                 "metadata_generator": "active" if service_registry.metadata_generator else "inactive",
-                "conversation_handler": "active" if service_registry.conversation_handler else "inactive",
                 "cache_service": "active" if service_registry.cache_service else "inactive"
-            }
+            },
+            "active_services": active_services,
+            "total_services": 3
         }
     except Exception as e:
         logger.error(f"Health check failed: {str(e)}")
@@ -312,7 +379,10 @@ async def liveness_check() -> Dict[str, str]:
 
 # Include API routes
 from api.routes import router as api_router
+from api.audio_transcription_routes import router as audio_router
+
 app.include_router(api_router, prefix="/api/v1")
+app.include_router(audio_router)
 
 
 # Root endpoint

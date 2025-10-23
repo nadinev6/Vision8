@@ -124,6 +124,7 @@ test-*.html
 debug-*.html
 testUserSetup.html
 createTestUser.js
+test-backend-connection.html
 **/test/**
 **/tests/**
 **/__tests__/**
@@ -135,3 +136,15 @@ createTestUser.js
 *.spec.ts
 *.spec.jsx
 *.spec.tsx
+
+# Backend specific exclusions
+vision8-backend/__pycache__/
+vision8-backend/venv/
+vision8-backend/cache/
+vision8-backend/temp/
+vision8-backend/.env
+vision8-backend/vision8-474519-432333899806.json
+vision8-backend/scripts/sample_video_data_manual_*.json
+
+# Keep .env.example for reference
+!vision8-backend/.env.example

@@ -8,7 +8,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 from datetime import datetime
 import sys
 from dotenv import load_dotenv
-from .langcache_service import LangCacheService
+from services.langcache_service import LangCacheService
 
 # Configure logging
 logger = structlog.get_logger()

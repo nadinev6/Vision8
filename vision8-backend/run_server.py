@@ -9,46 +9,25 @@ import os
 import sys
 from pathlib import Path
 
-# Add the src directory to Python path
+# Add both the current directory and src directory to Python path
 current_dir = Path(__file__).parent
 src_dir = current_dir / "src"
+sys.path.insert(0, str(current_dir))
 sys.path.insert(0, str(src_dir))
+
+# Change to src directory for relative imports to work
+os.chdir(src_dir)
 
 # Now import and run the main application
 if __name__ == "__main__":
     try:
-        from main import app
-        import uvicorn
-        
-        # Get settings
-        host = os.getenv("API_HOST", "0.0.0.0")
-        port = int(os.getenv("API_PORT", 8000))
-        debug = os.getenv("API_DEBUG_MODE", "false").lower() == "true"
+        from main import main
         
         print(f"🚀 Starting Vision8 Backend Server...")
-        print(f"📍 Host: {host}")
-        print(f"🔌 Port: {port}")
-        print(f"🐛 Debug: {debug}")
-        print(f"🌐 API Docs: http://{host}:{port}/docs")
+        print(f"📍 Working directory: {os.getcwd()}")
         
-        # Start the server
-        if debug:
-            # Use string import for reload mode
-            uvicorn.run(
-                "main:app",
-                host=host,
-                port=port,
-                reload=True,
-                log_level="debug"
-            )
-        else:
-            # Use app object for production
-            uvicorn.run(
-                app,
-                host=host,
-                port=port,
-                log_level="info"
-            )
+        # Run the main function which handles uvicorn startup
+        main()
         
     except ImportError as e:
         print(f"❌ Import Error: {e}")

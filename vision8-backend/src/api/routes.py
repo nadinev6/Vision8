@@ -406,3 +406,73 @@ async def test_integration() -> Dict[str, Any]:
 # - GET /api/v1/video/analysis/search - Search video content  
 # - GET /api/v1/video/analysis/elasticsearch/status - Check Elasticsearch status
 # - DELETE /api/v1/video/analysis/video/{video_id} - Delete video data
+
+@router.post("/add-sample-video")
+async def add_sample_video(video_data: Dict[str, Any]) -> Dict[str, str]:
+    """Add a sample video to the system for demo purposes."""
+    try:
+        import firebase_admin
+        from firebase_admin import credentials, firestore
+        from datetime import datetime
+        
+        # Initialize Firebase if not already done
+        try:
+            if not firebase_admin._apps:
+                # Use a minimal config for demo purposes
+                firebase_admin.initialize_app()
+        except Exception:
+            pass
+        
+        db = firestore.client()
+        
+        # Extract data
+        video_id = video_data.get("video_id")
+        user_id = video_data.get("user_id", "test-user-123")
+        
+        if not video_id:
+            return {"error": "video_id is required"}
+        
+        # Prepare Firebase document
+        firebase_doc = {
+            "videoId": video_id,
+            "title": video_data.get("title", "Sample Video"),
+            "uploadedAt": datetime.now(),
+            "duration": video_data.get("duration_ms", 0) / 1000,
+            "fileSize": video_data.get("file_size", 0),
+            "status": "completed",
+            "gcsUrl": video_data.get("gcs_url", ""),
+            "publicUrl": video_data.get("public_url", ""),
+            "scenesCount": len(video_data.get("scenes", [])),
+            "manuallyAdded": True,
+            "metadata": {
+                "objectsDetected": len(video_data.get("objects_detected", [])),
+                "transcriptAvailable": bool(video_data.get("transcript_summary")),
+                "visualSummary": video_data.get("visual_summary", "")[:200] + "..." if video_data.get("visual_summary") else ""
+            }
+        }
+        
+        # Add to Firebase
+        doc_ref = db.collection("users").document(user_id).collection("videoHistory").document(video_id)
+        doc_ref.set(firebase_doc)
+        
+        # Update user stats
+        user_ref = db.collection("users").document(user_id)
+        user_ref.update({
+            "videoCount": firestore.Increment(1),
+            "lastActivity": datetime.now()
+        })
+        
+        logger.info("Sample video added to Firebase", video_id=video_id, user_id=user_id)
+        
+        return {
+            "status": "success",
+            "message": f"Video {video_id} added to user {user_id} history",
+            "video_id": video_id
+        }
+        
+    except Exception as e:
+        logger.error("Failed to add sample video", error=str(e))
+        return {
+            "status": "error", 
+            "error": str(e)
+        }

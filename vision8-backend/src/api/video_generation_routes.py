@@ -32,6 +32,7 @@ class GenerationRequest(BaseModel):
     reference_frame: Optional[str] = Field(None, description="Base64 encoded reference frame")
     style_settings: Optional[Dict[str, Any]] = Field(None, description="Additional style parameters")
     structured_context: Optional[Dict[str, Any]] = Field(None, description="Rich scene context from RAG system")
+    user_api_key: Optional[str] = Field(None, description="User-provided Vertex AI access token")
 
 
 class GenerationResponse(BaseModel):
@@ -110,7 +111,8 @@ async def generate_scene(
             quality=request.quality,
             duration_seconds=request.duration_seconds,
             reference_frame=request.reference_frame,
-            style_settings=request.style_settings
+            style_settings=request.style_settings,
+            user_api_key=request.user_api_key
         )
         
         logger.info("Scene generation initiated",

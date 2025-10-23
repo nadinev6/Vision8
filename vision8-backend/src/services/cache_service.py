@@ -11,11 +11,17 @@ class CacheService:
         """Initialize Redis client"""
         try:
             redis_url = os.getenv('REDIS_URL')
+            redis_password = os.getenv('REDIS_PASSWORD')
+            
             if not redis_url:
                 raise ValueError("REDIS_URL must be configured")
             
             # Parse Redis URL - format: redis://host:port or host:port
             if redis_url.startswith('redis://'):
+                # Add password to URL if provided
+                if redis_password:
+                    # Insert password into redis URL: redis://:password@host:port
+                    redis_url = redis_url.replace('redis://', f'redis://:{redis_password}@')
                 self.redis_client = redis.from_url(redis_url, decode_responses=True)
             else:
                 # Handle host:port format
@@ -23,6 +29,7 @@ class CacheService:
                 self.redis_client = redis.Redis(
                     host=host,
                     port=int(port),
+                    password=redis_password,  # Add password here
                     decode_responses=True,
                     socket_timeout=5,
                     retry_on_timeout=True
@@ -30,7 +37,7 @@ class CacheService:
             
             # Test connection
             self.redis_client.ping()
-            logger.info("redis_connection_established", url=redis_url)
+            logger.info("redis_connection_established", url=redis_url, has_password=bool(redis_password))
         except redis.ConnectionError as e:
             logger.error("redis_connection_failed", error=str(e))
             raise

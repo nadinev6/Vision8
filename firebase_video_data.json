@@ -1,0 +1,17 @@
+{
+  "videoId": "manual_nepal_documentary",
+  "title": "The DEADLIEST Storm in Nepal History - Annapurna Circuit Documentary",
+  "uploadedAt": "2025-10-23T14:34:25.302Z",
+  "duration": 240,
+  "fileSize": 85000000,
+  "status": "completed",
+  "gcsUrl": "gs://vision8-sample-bucket/The DEADLIEST Storm in Nepal History  How 43 Died on the Annapurna Circuit - Terror Twin (1080p, h264).mp4",
+  "publicUrl": "https://storage.googleapis.com/vision8-sample-bucket/The%20DEADLIEST%20Storm%20in%20Nepal%20History%20%20How%2043%20Died%20on%20the%20Annapurna%20Circuit%20-%20Terror%20Twin%20(1080p%2C%20h264).mp4",
+  "scenesCount": 4,
+  "manuallyAdded": true,
+  "metadata": {
+    "objectsDetected": 12,
+    "transcriptAvailable": true,
+    "visualSummary": "Mountain documentary featuring dramatic footage of the Annapurna Circuit trek, severe weather conditions, rescue operations, and survivor testimonies from the 2014 tragedy. Shows the deadly blizzard that struck the Annapurna Circuit in October 2014, killing 43 trekkers."
+  }
+}
