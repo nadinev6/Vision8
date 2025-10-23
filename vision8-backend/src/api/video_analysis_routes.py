@@ -75,11 +75,24 @@ async def analyze_video(
             temp_file.write(content)
         
         # Generate metadata using the metadata generator
-        logger.info("generating_metadata", video_id=video_id)
-        metadata_result = await metadata_generator.generate_metadata(
-            video_path=temp_file_path,
-            video_id=video_id
-        )
+        logger.info("generating_metadata", video_id=video_id, file_path=temp_file_path)
+        
+        try:
+            metadata_result = await metadata_generator.generate_metadata(
+                video_path=temp_file_path,
+                video_id=video_id
+            )
+            logger.info("metadata_generated_successfully", 
+                       video_id=video_id, 
+                       has_scenes=bool(metadata_result.get("scenes")),
+                       scene_count=len(metadata_result.get("scenes", [])),
+                       has_transcript=bool(metadata_result.get("transcript")))
+        except Exception as metadata_error:
+            logger.error("metadata_generation_failed", 
+                        video_id=video_id, 
+                        error=str(metadata_error),
+                        error_type=type(metadata_error).__name__)
+            raise
         
         # Process and index the metadata
         indexed_count = 0
@@ -208,6 +221,99 @@ async def search_video_content(
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
 
 
+@router.post("/test-index")
+async def test_index_document() -> Dict[str, Any]:
+    """
+    Test indexing a sample document to verify Elasticsearch is working.
+    """
+    if not elastic_service:
+        return {"error": "Elasticsearch service not available"}
+    
+    try:
+        # Create a test document
+        test_doc = {
+            "video_id": "test_video_001",
+            "scene_id": "test_video_001_scene_001",
+            "start_time_ms": 0,
+            "end_time_ms": 5000,
+            "scene_summary": "Test scene with a person speaking",
+            "full_description": "This is a test scene showing a person speaking to the camera",
+            "scene_embedding": [0.1] * 768,  # Mock embedding
+            "transcript_phrases": [
+                {
+                    "text": "Hello, this is a test video",
+                    "start_ms": 0,
+                    "end_ms": 3000,
+                    "speaker": "narrator"
+                }
+            ],
+            "objects_tracked": [
+                {
+                    "label": "person",
+                    "track_id": "person_1",
+                    "boxes": []
+                }
+            ],
+            "actions_detected": ["speaking"]
+        }
+        
+        # Index the test document
+        response = elastic_service.es_client.index(
+            index=elastic_service.index_name,
+            document=test_doc,
+            id="test_doc_001"
+        )
+        
+        return {
+            "status": "success",
+            "document_indexed": True,
+            "elasticsearch_response": {
+                "result": response.get("result", "unknown"),
+                "index": response.get("_index", "unknown"),
+                "id": response.get("_id", "unknown")
+            },
+            "test_document_id": test_doc["scene_id"]
+        }
+        
+    except Exception as e:
+        return {
+            "error": str(e),
+            "error_type": type(e).__name__
+        }
+
+
+@router.get("/test-search")
+async def test_search(query: str = "video") -> Dict[str, Any]:
+    """
+    Test search functionality with debug information.
+    """
+    if not elastic_service:
+        return {"error": "Elasticsearch service not available"}
+    
+    try:
+        # Simple search to test if documents exist
+        response = elastic_service.es_client.search(
+            index=elastic_service.index_name,
+            body={
+                "query": {"match_all": {}},
+                "size": 5
+            }
+        )
+        
+        return {
+            "total_documents": response["hits"]["total"]["value"],
+            "documents_found": len(response["hits"]["hits"]),
+            "sample_documents": [hit["_source"] for hit in response["hits"]["hits"]],
+            "index_name": elastic_service.index_name
+        }
+        
+    except Exception as e:
+        return {
+            "error": str(e),
+            "error_type": type(e).__name__
+        }
+
+
 @router.get("/elasticsearch/status")
 async def elasticsearch_status() -> Dict[str, Any]:
     """
@@ -231,16 +337,32 @@ async def elasticsearch_status() -> Dict[str, Any]:
         
         index_stats = {}
         if index_exists:
-            stats = elastic_service.es_client.indices.stats(index=elastic_service.index_name)
-            index_stats = {
-                "document_count": stats["indices"][elastic_service.index_name]["total"]["docs"]["count"],
-                "index_size": stats["indices"][elastic_service.index_name]["total"]["store"]["size_in_bytes"]
-            }
+            try:
+                # Try to get stats (may not work in serverless mode)
+                stats = elastic_service.es_client.indices.stats(index=elastic_service.index_name)
+                index_stats = {
+                    "document_count": stats["indices"][elastic_service.index_name]["total"]["docs"]["count"],
+                    "index_size": stats["indices"][elastic_service.index_name]["total"]["store"]["size_in_bytes"]
+                }
+            except Exception as stats_error:
+                # Fallback: use search to count documents
+                try:
+                    count_response = elastic_service.es_client.count(index=elastic_service.index_name)
+                    index_stats = {
+                        "document_count": count_response["count"],
+                        "index_size": "unknown (serverless mode)"
+                    }
+                except Exception as count_error:
+                    index_stats = {
+                        "document_count": "unknown",
+                        "index_size": "unknown",
+                        "error": "Cannot access stats in serverless mode"
+                    }
         
         return {
             "status": "connected" if is_connected else "disconnected",
-            "index_name": elastic_service.index_name,
-            "index_exists": index_exists,
+            "index_name": str(elastic_service.index_name),
+            "index_exists": bool(index_exists),
             "index_stats": index_stats,
             "timestamp": datetime.utcnow().isoformat()
         }
@@ -252,6 +374,62 @@ async def elasticsearch_status() -> Dict[str, Any]:
             "error": str(e),
             "timestamp": datetime.utcnow().isoformat()
         }
+
+
+@router.get("/scene/{video_id}/{scene_id}")
+async def get_scene_context(video_id: str, scene_id: str) -> Dict[str, Any]:
+    """
+    Get structured context for a specific scene.
+    
+    Args:
+        video_id: The video identifier
+        scene_id: The scene identifier
+        
+    Returns:
+        Scene context with metadata, transcript, and objects
+    """
+    if not elastic_service:
+        raise HTTPException(
+            status_code=503, 
+            detail="Elasticsearch service not available"
+        )
+    
+    try:
+        logger.info("getting_scene_context", video_id=video_id, scene_id=scene_id)
+        
+        # Search for the specific scene
+        query = {
+            "query": {
+                "bool": {
+                    "must": [
+                        {"term": {"video_id": video_id}},
+                        {"term": {"scene_id": scene_id}}
+                    ]
+                }
+            }
+        }
+        
+        response = elastic_service.es_client.search(
+            index=elastic_service.index_name,
+            body=query
+        )
+        
+        if response["hits"]["total"]["value"] > 0:
+            scene_data = response["hits"]["hits"][0]["_source"]
+            return {
+                "status": "success",
+                "scene_context": scene_data,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        else:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Scene {scene_id} not found for video {video_id}"
+            )
+            
+    except Exception as e:
+        logger.error("get_scene_context_failed", video_id=video_id, scene_id=scene_id, error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to get scene context: {str(e)}")
 
 
 @router.delete("/video/{video_id}")

@@ -147,9 +147,7 @@ async function getVideoFrames(videoFile: File, maxFrames: number): Promise<{ dat
 
 export async function analyzeVideo(videoFile: File, customVideoId?: string): Promise<{ scenes: Scene[], transcripts: TranscriptItem[], objects: TrackedObject[] }> {
     console.log("🎬 Starting video analysis...");
-    console.log("AI instance:", ai);
-    console.log("API Key present:", !!API_KEY);
-    console.log("API Key length:", API_KEY?.length);
+    console.log("Video file:", videoFile.name, "Size:", videoFile.size);
     
     // Check if migration from IndexedDB to Elasticsearch is needed
     try {
@@ -163,6 +161,121 @@ export async function analyzeVideo(videoFile: File, customVideoId?: string): Pro
       console.warn('⚠️ Migration check failed, continuing with analysis:', error);
     }
     
+    // Try backend analysis first
+    try {
+        console.log("🔄 Attempting backend video analysis...");
+        const backendResult = await analyzeVideoWithBackend(videoFile, customVideoId);
+        if (backendResult) {
+            console.log("✅ Backend analysis successful");
+            return backendResult;
+        }
+    } catch (backendError) {
+        console.warn("⚠️ Backend analysis failed, falling back to client-side:", backendError);
+    }
+    
+    // Fallback to client-side analysis
+    console.log("🔄 Using client-side analysis as fallback...");
+    return await analyzeVideoClientSide(videoFile, customVideoId);
+}
+
+/**
+ * Analyze video using the backend API
+ */
+async function analyzeVideoWithBackend(videoFile: File, customVideoId?: string): Promise<{ scenes: Scene[], transcripts: TranscriptItem[], objects: TrackedObject[] } | null> {
+    try {
+        const formData = new FormData();
+        formData.append('file', videoFile);
+        if (customVideoId) {
+            formData.append('video_id', customVideoId);
+        }
+        
+        console.log("📤 Uploading video to backend for analysis...");
+        const response = await fetch('http://localhost:8000/api/v1/video/analysis/upload', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Backend analysis failed: ${response.status} ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        console.log("📊 Backend analysis result:", result);
+        
+        if (result.status === 'success') {
+            // Convert backend format to frontend format
+            return await convertBackendResultToFrontend(result.video_id);
+        } else {
+            throw new Error(`Backend analysis failed: ${result.error || 'Unknown error'}`);
+        }
+        
+    } catch (error) {
+        console.error("❌ Backend analysis error:", error);
+        throw error;
+    }
+}
+
+/**
+ * Convert backend analysis result to frontend format by searching Elasticsearch
+ */
+async function convertBackendResultToFrontend(videoId: string): Promise<{ scenes: Scene[], transcripts: TranscriptItem[], objects: TrackedObject[] }> {
+    try {
+        // Search for all scenes from this video
+        const searchResults = await hybridSearch(`video_id:${videoId}`, videoId, 50);
+        
+        const scenes: Scene[] = [];
+        const transcripts: TranscriptItem[] = [];
+        const objects: TrackedObject[] = [];
+        
+        for (const result of searchResults) {
+            const doc = result.document;
+            
+            // Add scene
+            scenes.push({
+                timestamp: doc.start_time_ms / 1000,
+                description: doc.scene_summary || doc.full_description
+            });
+            
+            // Add transcripts
+            if (doc.transcript_phrases) {
+                for (const phrase of doc.transcript_phrases) {
+                    transcripts.push({
+                        startTime: phrase.start_ms / 1000,
+                        endTime: phrase.end_ms / 1000,
+                        text: phrase.text
+                    });
+                }
+            }
+            
+            // Add objects
+            if (doc.objects_tracked) {
+                for (const obj of doc.objects_tracked) {
+                    objects.push({
+                        timestamp: doc.start_time_ms / 1000,
+                        name: obj.label
+                    });
+                }
+            }
+        }
+        
+        console.log("✅ Converted backend result:", { 
+            scenes: scenes.length, 
+            transcripts: transcripts.length, 
+            objects: objects.length 
+        });
+        
+        return { scenes, transcripts, objects };
+        
+    } catch (error) {
+        console.error("❌ Failed to convert backend result:", error);
+        throw error;
+    }
+}
+
+/**
+ * Client-side video analysis (fallback)
+ */
+async function analyzeVideoClientSide(videoFile: File, customVideoId?: string): Promise<{ scenes: Scene[], transcripts: TranscriptItem[], objects: TrackedObject[] }> {
     // Check if GoogleGenAI is properly initialized
     if (!ai) {
         console.error("❌ GoogleGenAI instance is null or undefined");
