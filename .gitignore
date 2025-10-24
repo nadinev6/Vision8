@@ -148,3 +148,31 @@ vision8-backend/scripts/sample_video_data_manual_*.json
 
 # Keep .env.example for reference
 !vision8-backend/.env.example
+
+# Kiro IDE internal files (private documentation, specs, planning)
+.kiro/
+
+# Deployment files (contain sensitive info and are environment-specific)
+deploy*.sh
+deploy*.bat
+deploy*.ps1
+deploy*.cmd
+restart-backend.*
+DEPLOY_*.md
+DEPLOY_*.ps1
+DEPLOY_*.sh
+DEPLOY_*.bat
+*deploy*.json
+*deploy*.yaml
+*deploy*.yml
+
+# Internal documentation and planning (should be in .kiro/)
+ROADMAP.md
+ARCHITECTURE.md
+Internal_README.md
+*_FIX.md
+*_FIXES.md
+PRODUCTION_*.md
+CORS_*.md
+BUILD_*.md
+REDIS_*.md

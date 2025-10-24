@@ -6,9 +6,13 @@ import { backendService, isBackendAvailable } from './backend-integration';
 
 console.log("🚀 Gemini.ts module loaded!");
 
-// Force the API key for now to test
-const API_KEY = "AIzaSyBFYFaDZHneXJ0PMzeQRUvN-98A3FJ-3SU";
-console.log("Using hardcoded API key for testing:", API_KEY.substring(0, 10) + "...");
+// Use environment variable or backend API
+const API_KEY = import.meta.env?.VITE_GEMINI_API_KEY || null;
+if (!API_KEY) {
+  console.log("🔒 No client-side API key - will use backend API for analysis");
+} else {
+  console.log("⚠️ Using client-side API key for testing:", API_KEY.substring(0, 10) + "...");
+}
 
 import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
 
@@ -204,9 +208,9 @@ export async function analyzeVideo(videoFile: File, customVideoId?: string): Pro
     console.warn("⚠️ Falling back to client-side analysis");
   }
 
-  // Fallback to client-side analysis
-  console.log("🔄 Using client-side analysis as fallback...");
-  return await analyzeVideoClientSide(videoFile, customVideoId);
+  // No client-side fallback - force backend usage for security
+  console.error("❌ Backend analysis failed and client-side analysis is disabled for security");
+  throw new Error("Video analysis failed. Backend API is required but unavailable.");
 }
 
 /**
@@ -221,7 +225,11 @@ async function analyzeVideoWithBackend(videoFile: File, customVideoId?: string):
     }
 
     console.log("📤 Uploading video to backend for analysis...");
-    const response = await fetch('http://localhost:8000/api/v1/video/analysis/upload', {
+    const backendUrl = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+    const uploadUrl = `${backendUrl}/analysis/upload`;
+    console.log("🔗 Using backend URL:", uploadUrl);
+    
+    const response = await fetch(uploadUrl, {
       method: 'POST',
       body: formData
     });

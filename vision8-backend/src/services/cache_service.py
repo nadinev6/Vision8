@@ -8,47 +8,67 @@ logger = structlog.get_logger()
 
 class CacheService:
     def __init__(self):
-        """Initialize Redis client"""
+        """Initialize Redis client with fallback to memory cache"""
+        self.redis_client = None
+        self.memory_cache = {}  # Fallback in-memory cache
+        self.use_memory_cache = False
+        
         try:
             redis_url = os.getenv('REDIS_URL')
             redis_password = os.getenv('REDIS_PASSWORD')
             
             if not redis_url:
-                raise ValueError("REDIS_URL must be configured")
+                logger.info("Redis not configured, using memory cache")
+                self.use_memory_cache = True
+                return
             
-            # Parse Redis URL - format: redis://host:port or host:port
+            # Parse Redis URL - handle different formats
             if redis_url.startswith('redis://'):
-                # Add password to URL if provided
-                if redis_password:
-                    # Insert password into redis URL: redis://:password@host:port
+                # Check if password is already in URL
+                if '@' not in redis_url and redis_password:
+                    # Add password to URL: redis://:password@host:port
                     redis_url = redis_url.replace('redis://', f'redis://:{redis_password}@')
-                self.redis_client = redis.from_url(redis_url, decode_responses=True)
+                
+                self.redis_client = redis.from_url(
+                    redis_url, 
+                    decode_responses=True, 
+                    socket_timeout=10,
+                    socket_connect_timeout=10,
+                    retry_on_timeout=True,
+                    health_check_interval=30
+                )
             else:
                 # Handle host:port format
-                host, port = redis_url.split(':')
-                self.redis_client = redis.Redis(
-                    host=host,
-                    port=int(port),
-                    password=redis_password,  # Add password here
-                    decode_responses=True,
-                    socket_timeout=5,
-                    retry_on_timeout=True
-                )
+                try:
+                    host, port = redis_url.split(':')
+                    self.redis_client = redis.Redis(
+                        host=host,
+                        port=int(port),
+                        password=redis_password,
+                        decode_responses=True,
+                        socket_timeout=10,
+                        socket_connect_timeout=10,
+                        retry_on_timeout=True,
+                        health_check_interval=30
+                    )
+                except ValueError:
+                    logger.error("Invalid Redis URL format", redis_url=redis_url)
+                    self.use_memory_cache = True
+                    return
             
             # Test connection
             self.redis_client.ping()
-            logger.info("redis_connection_established", url=redis_url, has_password=bool(redis_password))
+            logger.info("redis_connection_established", url=redis_url[:50] + "...", has_password=bool(redis_password))
+            
         except redis.ConnectionError as e:
-            logger.error("redis_connection_failed", error=str(e))
-            raise
+            logger.warning("redis_connection_failed_using_memory_cache", error=str(e))
+            self.use_memory_cache = True
+            self.redis_client = None
         except Exception as e:
-            logger.error("redis_initialization_failed", error=str(e))
-            raise
+            logger.warning("redis_initialization_failed_using_memory_cache", error=str(e))
+            self.use_memory_cache = True
+            self.redis_client = None
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=4, max=10)
-    )
     def cache_vector(self, key: str, vector: List[float], ttl: int = None) -> None:
         """
         Cache vector with optional TTL
@@ -63,18 +83,28 @@ class CacheService:
             if ttl is None:
                 ttl = int(os.getenv('VECTOR_CACHE_TTL', 3600))
 
-            self.redis_client.setex(
-                name=cache_key,
-                time=ttl,
-                value=str(vector)
-            )
-            logger.debug("vector_cached", key=cache_key, ttl=ttl)
+            if self.use_memory_cache:
+                # Use in-memory cache
+                import time
+                self.memory_cache[cache_key] = {
+                    'vector': vector,
+                    'expires_at': time.time() + ttl
+                }
+                logger.debug("vector_cached_memory", key=cache_key, ttl=ttl)
+            else:
+                # Use Redis
+                self.redis_client.setex(
+                    name=cache_key,
+                    time=ttl,
+                    value=str(vector)
+                )
+                logger.debug("vector_cached_redis", key=cache_key, ttl=ttl)
             
-        except redis.RedisError as e:
+        except Exception as e:
             logger.error("vector_cache_failed", 
                         key=key, 
                         error=str(e))
-            raise
+            # Don't raise - caching is not critical
 
     def get_cached_vector(self, key: str) -> Optional[List[float]]:
         """
@@ -88,16 +118,33 @@ class CacheService:
         """
         try:
             cache_key = f"vector:{key}"
-            result = self.redis_client.get(cache_key)
             
-            if result:
-                logger.debug("vector_cache_hit", key=cache_key)
-                return eval(result)  # Convert string representation back to list
+            if self.use_memory_cache:
+                # Use in-memory cache
+                import time
+                cached_item = self.memory_cache.get(cache_key)
+                if cached_item:
+                    if time.time() < cached_item['expires_at']:
+                        logger.debug("vector_cache_hit_memory", key=cache_key)
+                        return cached_item['vector']
+                    else:
+                        # Expired, remove it
+                        del self.memory_cache[cache_key]
+                
+                logger.debug("vector_cache_miss_memory", key=cache_key)
+                return None
+            else:
+                # Use Redis
+                result = self.redis_client.get(cache_key)
+                
+                if result:
+                    logger.debug("vector_cache_hit_redis", key=cache_key)
+                    return eval(result)  # Convert string representation back to list
+                
+                logger.debug("vector_cache_miss_redis", key=cache_key)
+                return None
             
-            logger.debug("vector_cache_miss", key=cache_key)
-            return None
-            
-        except redis.RedisError as e:
+        except Exception as e:
             logger.error("vector_cache_retrieval_failed", 
                         key=key,
                         error=str(e))

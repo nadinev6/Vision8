@@ -1,0 +1,66 @@
+# Git files
+.git
+.gitignore
+
+# Documentation
+*.md
+docs/
+
+# Development files
+.env
+.env.local
+.env.development
+*.log
+
+# Keep production environment files
+!.env.production
+!env-vars.yaml
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.pytest_cache/
+.coverage
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+temp/
+cache/
+*.tmp
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Node modules (if any)
+node_modules/
+
+# Test files
+tests/
+test_*.py
+*_test.py
+
+# Deployment scripts
+deploy-*.sh
+cloudbuild.yaml
+
+# Large files that aren't needed
+*.mp4
+*.avi
+*.mov
+*.wav
+*.mp3

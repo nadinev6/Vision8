@@ -6,7 +6,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 
 // Debug environment variables
 console.log("=== Environment Debug ===");
-console.log("VITE_GEMINI_API_KEY:", import.meta.env.VITE_GEMINI_API_KEY);
+console.log("VITE_GEMINI_API_KEY:", import.meta.env?.VITE_GEMINI_API_KEY);
 console.log("All env vars:", import.meta.env);
 
 const rootElement = document.getElementById('root');

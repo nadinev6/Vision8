@@ -10,7 +10,7 @@ import { LogoIcon, UserIcon } from './components/icons';
 import { analyzeVideo, generateChatResponseWithRAG, VideoSettingsCallbacks, GenerationSettingsCallbacks } from './lib/gemini';
 import { getHistory, saveHistory, ChatSession } from './lib/history';
 import { uploadVideo } from './lib/storage';
-import './lib/migrate-to-indexeddb'; // Load IndexedDB utilities
+import './lib/cache-debug'; // Load cache debug utilities
 
 
 // Main App Component (authenticated)

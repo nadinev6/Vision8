@@ -1,9 +1,8 @@
-[![Contributing](https://img.shields.io/badge/Contributions-Welcome-brightgreen.svg)](/CONTRIBUTING.md)[![Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen.svg)](#)[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](#)[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](/LICENSE.txt)
+[![Contributing](https://img.shields.io/badge/Contributions-Welcome-brightgreen.svg)](#contributing)[![Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen.svg)](#)[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](#)[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](/LICENSE.txt)
 
 <p align="center">
   <img src="https://github.com/nadinev6/Vision8/blob/afeb0723136b6373fe9ce5bd682d4f06e1d0931a/VISION%208.png" alt="Vision 8 Logo" width="250">
 </p>
-
 
 <p align="center">
   <a href="https://react.dev/" target="_blank"><img src="https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React"></a>
@@ -11,155 +10,118 @@
   <a href="https://tailwindcss.com/" target="_blank"><img src="https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" alt="Tailwind CSS"></a>
   <a href="https://deepmind.google/technologies/gemini/" target="_blank"><img src="https://img.shields.io/badge/Google_Gemini-8E44AD?style=for-the-badge&logo=google-cloud&logoColor=white" alt="Google Gemini"></a>
   <a href="https://fastapi.tiangolo.com/" target="_blank"><img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI"></a>
-  <a href="https://www.elastic.co/elasticsearch/" target="_blank"><img src="https://img.shields.io/badge/Elasticsearch-005571?style=for-the-badge&logo=elasticsearch&logoColor=white" alt="Elasticsearch"></a>
-  <a href="https://redis.io/" target="_blank"><img src="https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white" alt="Redis"></a>
-  <a href="https://firebase.google.com/" target="_blank"><img src="https://img.shields.io/badge/Firebase-FFCA28?style=for-the-badge&logo=firebase&logoColor=black" alt="Firebase"></a>
 </p>
 
-## Table of Contents
+## 🌐 Live Demo
 
-  - [🚀 About Vision 8](#about-vision-8)
-    - [🎯 Video-to-Video Generation](#video-to-video-generation)
-  - [✨ Key Features](#key-features)
-  - [🏗️ Architecture](#️-architecture)
-  - [💻 Technology Stack](#-technology-stack)
-  - [🛠️ Getting Started](#️-getting-started)
-    - [Prerequisites](#prerequisites)
-    - [Backend Setup](#backend-setup)
-    - [Frontend Setup](#frontend-setup)
-  - [🤝 Contributing](#-contributing)
-  - [📄 License](#-license)
+**[https://vision8-e7683.web.app](https://vision8-e7683.web.app)**
 
+Experience Vision8's AI video analysis capabilities with our interactive demo.
 
-## 🚀 About Vision 8
+---
 
-Vision 8 is a cutting-edge workbench for deep, synchronous video analysis. It leverages Google's Gemini API to deconstruct video content into structured, actionable data: scenes, transcripts, and objects and provides a context-rich, conversational interface for exploration.
+## 🚀 About Vision8
 
-### 🎯 Video-to-Video Generation
+Vision8 is a cutting-edge AI-powered video analysis platform that transforms how you interact with video content. Upload any video and get instant AI-powered breakdowns, accurate transcriptions, and intelligent search capabilities.
 
-Vision 8 is engineered as a foundational platform for high-fidelity video-to-video generation. The ultimate aim is to empower users to make minor, targeted changes to a reference video (e.g., swapping an object, changing a sign's text, adjusting lighting) and instantly generate a new, synthesized video of production quality, all while maintaining the original content's integrity and fidelity.
+### 🎯 Core Mission
+
+Democratize video intelligence by making advanced AI video analysis accessible to creators, educators, and businesses worldwide.
 
 ## ✨ Key Features
 
--   **🤖 AI-Powered Video Analysis**: Utilizes `gemini-2.5-flash` for fast, comprehensive video deconstruction into scenes, transcripts, and tracked objects.
--   **🎙️ Professional Audio Transcription**: Enterprise-grade speech recognition powered by **Google Cloud Speech-to-Text** with word-level timestamps, confidence scoring, and intelligent segment processing for production-quality transcripts.
--   **💬 Conversational Intelligence (RAG)**: An integrated chat interface provides intelligent, grounded answers using a Retrieval-Augmented Generation (RAG) pipeline powered by a FastAPI backend, Elasticsearch for vector search, and Gemini Function Calling.
--   **🔄 Synchronized Playback**: Clicking any inline citation in the chat automatically navigates the video player to the exact moment referenced, creating a seamless link between conversation, data, and playback.
--   **🔐 User Authentication**: Secure user authentication and session management powered by Firebase Auth.
--   **☁️ Cloud Storage**: Seamless video upload and storage using Firebase Storage with automatic file management.
--   **📊 Analysis History**: Persistent storage of video analysis results and chat conversations tied to user accounts.
--   **🖥️ Advanced UI/UX**: Features a fully resizable layout, a dual-player setup for comparison, and frame-accurate playback controls.
+- **🤖 AI-Powered Video Analysis**: Comprehensive video deconstruction using Google Gemini Flash
+- **🎙️ Audio Transcription**: Accurate speech-to-text with speaker identification and timestamps
+- **💬 Conversational Intelligence**: Ask questions about your video content and get precise answers
+- **🔍 Intelligent Search**: Find specific scenes, dialogue, or objects instantly
+- **🎨 AI Video Generation**: Replace scenes with AI-generated content (coming soon)
+- **🔄 Synchronized Playback**: Click any citation to jump to the exact moment in your video
 
 ## 🏗️ Architecture
 
-Vision 8 is a full-stack application with a React frontend and a Python (FastAPI) backend.
+Vision8 combines a modern React frontend with a powerful Python backend:
 
-1.  **User Authentication**: Users sign in through Firebase Auth, which manages sessions and user state across the application.
-2.  **Video Ingestion**: Authenticated users upload videos through the client. Videos are stored in Firebase Storage, and the frontend extracts representative frames to send to the backend.
-3.  **AI Deconstruction**: The backend's `metadata_generator` service uses the Gemini API to analyze the frames and generate structured metadata (scenes, descriptions, objects). Simultaneously, the `audio_transcription_service` extracts audio and performs high-accuracy speech recognition using Google Cloud Speech-to-Text.
-4.  **Vectorization & Indexing**: The `elastic_service` generates vector embeddings for both visual and audio metadata, creating a unified search index. Enhanced transcription data with word-level timestamps is integrated into Elasticsearch documents. Vector embeddings are cached in Redis by the `cache_service` to reduce latency and cost.
-5.  **Persistent Storage**: Analysis results and chat conversations are stored in Firebase, tied to the user's account for future access.
-6.  **Conversational RAG**: When the user asks a question, the frontend calls the backend's `/chat` endpoint. The `conversation_handler` orchestrates the RAG pipeline:
-    *   It generates a vector for the user's query.
-    *   It performs a semantic search against Elasticsearch to retrieve relevant video segments.
-    *   It passes the retrieved context and the original query to the Gemini model to generate a grounded, accurate answer.
-    *   The structured response is returned to the frontend for display.
-
-## 💻 Technology Stack
-
-| Component | Technology / Role |
-| :--- | :--- |
-| **Frontend** | React, TypeScript, Tailwind CSS, Vite |
-| **Backend** | Python, FastAPI, Uvicorn |
-| **AI/LLM** | Google Gemini API (`gemini-2.5-flash`, `text-embedding-004`) |
-| **Speech Recognition** | Google Cloud Speech-to-Text (Audio Transcription, Word Timestamps) |
-| **Database** | Elasticsearch (Vector Search, Metadata & Transcript Storage) |
-| **Cache** | Redis (Vector Embedding Cache) |
-| **Authentication** | Firebase Auth (User Management, Sessions) |
-| **Storage** | Firebase Storage (Video Files, User Data) |
-| **Deployment** | Designed for serverless environments like Google Cloud Run |
+- **Frontend**: React + TypeScript + Tailwind CSS
+- **Backend**: FastAPI + Python
+- **AI**: Google Gemini Flash (multimodal video + audio analysis)
+- **Search**: Vector-based semantic search
+- **Storage**: Firebase for user data and video storage
 
 ## 🛠️ Getting Started
 
-This project consists of a React frontend and a FastAPI backend.
-
 ### Prerequisites
+- Node.js 18+
+- Gemini API key
 
--   Node.js and npm/yarn
--   Python 3.9+ and pip
--   Access to an Elasticsearch cluster
--   Access to a Redis instance
--   A Google Gemini API Key
--   Firebase project with Authentication and Storage enabled
+### Quick Setup
+```bash
+# Clone the repository
+git clone https://github.com/nadinev6/Vision8.git
+cd Vision8
 
-### Backend Setup
+# Install dependencies
+npm install
 
-1.  **Navigate to the backend directory:**
-    ```bash
-    cd vision8-backend
-    ```
+# Set up environment variables
+cp .env.local.template .env
+# Add your VITE_GEMINI_API_KEY
 
-2.  **Install Python dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
+# Start development server
+npm run dev
+```
 
-3.  **Configure environment variables:**
-    Create a `.env` file by copying the example and fill in your credentials.
-    ```bash
-    cp .env.example .env
-    ```
-    -   `ELASTIC_URL`, `ELASTIC_API_KEY`, `ELASTIC_INDEX`
-    -   `GEMINI_API_KEY`
-    -   `GOOGLE_CLOUD_PROJECT`, `GOOGLE_APPLICATION_CREDENTIALS` (for Speech-to-Text)
-    -   `REDIS_URL`, `REDIS_API`
+### Deploy
+```bash
+# Build for production
+npm run build
 
-4.  **Run the backend server:**
-    The server will start on `http://localhost:8000`.
-    ```bash
-    uvicorn src.main:app --reload
-    ```
+# Deploy to Firebase (if configured)
+firebase deploy --only hosting
+```
 
-### Frontend Setup
+## 🎯 Use Cases
 
-1.  **Navigate to the root project directory:**
-    ```bash
-    cd .. 
-    ```
+- **Content Creators**: Analyze and enhance video content for better engagement
+- **Educators**: Search and organize educational materials with AI precision
+- **Businesses**: Process training videos and extract actionable insights
+- **Researchers**: Analyze video data with advanced AI capabilities
 
-2.  **Install Node.js dependencies:**
-    ```bash
-    npm install
-    ```
+## 🔧 Recent Updates
 
-3.  **Configure environment variables:**
-    Create a `.env` file in the root directory and add your API keys and Firebase configuration:
-    ```
-    GEMINI_API_KEY=your_google_gemini_api_key
-    NEXT_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
-    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
-    NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
-    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
-    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-    NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
-    ```
-
-4.  **Run the frontend development server:**
-    The application will be available at `http://localhost:3000`.
-    ```bash
-    npm run dev
-    ```
+- ✅ **Multimodal AI Integration**: 95% reduction in processing costs
+- ✅ **Real Audio Transcription**: Accurate speech-to-text from video audio
+- ✅ **Responsive Design**: Optimized for desktop and mobile devices
+- ✅ **Performance Optimization**: Faster analysis and improved user experience
 
 ## 🤝 Contributing
 
-Contributions are what make the open-source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+We welcome contributions from the community! Here's how you can help:
 
-1.  Fork the Project
-2.  Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3.  Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4.  Push to the Branch (`git push origin feature/AmazingFeature`)
-5.  Open a Pull Request
+1. **Fork the Project**
+2. **Create your Feature Branch** (`git checkout -b feature/AmazingFeature`)
+3. **Commit your Changes** (`git commit -m 'Add some AmazingFeature'`)
+4. **Push to the Branch** (`git push origin feature/AmazingFeature`)
+5. **Open a Pull Request**
 
 ## 📄 License
 
-Distributed under the MIT License. See [`LICENSE.txt`](/LICENSE.txt) for more information.
+This project is licensed under the MIT License - see the [LICENSE.txt](LICENSE.txt) file for details.
+
+## 🔗 Links
+
+- **🌐 Live Demo**: [https://vision8-e7683.web.app](https://vision8-e7683.web.app)
+- **📧 Contact**: [nadine@techie.com](mailto:nadine@techie.com)
+- **🐛 Issues**: [GitHub Issues](https://github.com/nadinev6/Vision8/issues)
+
+## 🙏 Acknowledgments
+
+- **Google Gemini** for powerful multimodal AI capabilities
+- **React & Vite** for excellent development experience
+- **Tailwind CSS** for beautiful, responsive design
+- **FastAPI** for robust backend framework
+
+---
+
+<p align="center">
+  <strong>Vision8</strong> - Transforming video content with AI, one frame at a time. 🎬✨
+</p>

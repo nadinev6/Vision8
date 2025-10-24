@@ -19,6 +19,7 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from dotenv import load_dotenv
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
@@ -29,13 +30,30 @@ class SimpleSettings:
     API_PORT = int(os.getenv("API_PORT", 8000))
     API_DEBUG_MODE = os.getenv("API_DEBUG_MODE", "false").lower() == "true"
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
-    CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
+    API_BASE_URL = os.getenv("API_BASE_URL", f"http://{os.getenv('API_HOST', '0.0.0.0')}:{os.getenv('API_PORT', 8000)}")
+    CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001,http://localhost:5173,https://vision8-e7683.web.app,https://vision8-e7683.firebaseapp.com").split(",")
     # Placeholder configs for services
     ELASTIC_URL = os.getenv("ELASTIC_URL", "http://localhost:9200")
     ELASTIC_API_KEY = os.getenv("ELASTIC_API_KEY")
     ELASTIC_INDEX = os.getenv("ELASTIC_INDEX", "scene_segments")
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
     GEMINI_MODEL_NAME = os.getenv("GEMINI_MODEL_NAME", "gemini-2.5-flash-preview-05-20")
+    
+    # Validate critical environment variables
+    @classmethod
+    def validate_config(cls):
+        missing_vars = []
+        if not cls.GEMINI_API_KEY:
+            missing_vars.append("GEMINI_API_KEY")
+        if not cls.ELASTIC_URL:
+            missing_vars.append("ELASTIC_URL") 
+        if not cls.ELASTIC_API_KEY:
+            missing_vars.append("ELASTIC_API_KEY")
+        
+        if missing_vars:
+            logger.warning("Missing environment variables", missing=missing_vars)
+            return False
+        return True
     VECTOR_CACHE_SIZE = int(os.getenv("VECTOR_CACHE_SIZE", 1000))
     VECTOR_CACHE_TTL = int(os.getenv("VECTOR_CACHE_TTL", 3600))
     
@@ -168,6 +186,10 @@ async def lifespan(app: FastAPI):
     logger.info(f"API Host: {settings.API_HOST}:{settings.API_PORT}")
     
     try:
+        # Validate configuration
+        if not settings.validate_config():
+            logger.warning("Some environment variables are missing - services may be limited")
+        
         await service_registry.initialize()
         logger.info("Application startup complete")
         yield
@@ -183,21 +205,35 @@ app = FastAPI(
     title="Vision8 Backend API",
     description="Intelligent video processing, AI-powered scene generation, and metadata extraction",
     version="1.0.0",
-    docs_url="/api/docs" if settings.API_DEBUG_MODE else None,
-    redoc_url="/api/redoc" if settings.API_DEBUG_MODE else None,
+    docs_url="/api/docs",  # Always enable docs for production API access
+    redoc_url="/api/redoc",  # Always enable redoc for production API access
     lifespan=lifespan
 )
 
 
-# Configure CORS
+# Configure CORS for production - Enhanced for search functionality
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-    max_age=3600,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
+    allow_headers=[
+        "Accept",
+        "Accept-Language",
+        "Content-Language",
+        "Content-Type",
+        "Authorization",
+        "X-Requested-With",
+        "X-Request-ID",
+        "Cache-Control",
+        "Pragma"
+    ],
+    expose_headers=[
+        "Content-Type",
+        "Content-Length",
+        "X-Request-ID"
+    ],
+    max_age=86400,  # 24 hours
 )
 
 
@@ -210,6 +246,48 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 # setup_security_middleware(app, settings)
 
 
+# Enhanced CORS middleware for production search functionality
+@app.middleware("http")
+async def add_cors_headers(request: Request, call_next):
+    """Ensure CORS headers are always present in responses with enhanced support."""
+    
+    # Handle preflight requests immediately
+    if request.method == "OPTIONS":
+        origin = request.headers.get("origin")
+        allowed_origin = origin if origin in settings.CORS_ORIGINS else settings.CORS_ORIGINS[0] if settings.CORS_ORIGINS else "*"
+        
+        return JSONResponse(
+            content={"message": "CORS preflight successful"},
+            headers={
+                "Access-Control-Allow-Origin": allowed_origin,
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH",
+                "Access-Control-Allow-Headers": "Accept, Accept-Language, Content-Language, Content-Type, Authorization, X-Requested-With, X-Request-ID, Cache-Control, Pragma",
+                "Access-Control-Expose-Headers": "Content-Type, Content-Length, X-Request-ID",
+                "Access-Control-Max-Age": "86400",
+                "Vary": "Origin"
+            }
+        )
+    
+    # Process regular requests
+    response = await call_next(request)
+    
+    # Add CORS headers to all responses
+    origin = request.headers.get("origin")
+    if origin and origin in settings.CORS_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = origin
+    elif settings.CORS_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = settings.CORS_ORIGINS[0]
+    else:
+        response.headers["Access-Control-Allow-Origin"] = "*"
+    
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH"
+    response.headers["Access-Control-Allow-Headers"] = "Accept, Accept-Language, Content-Language, Content-Type, Authorization, X-Requested-With, X-Request-ID, Cache-Control, Pragma"
+    response.headers["Access-Control-Expose-Headers"] = "Content-Type, Content-Length, X-Request-ID"
+    response.headers["Access-Control-Max-Age"] = "86400"
+    response.headers["Vary"] = "Origin"
+    
+    return response
+
 # Request logging middleware
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -221,7 +299,8 @@ async def log_requests(request: Request, call_next):
         method=request.method,
         path=request.url.path,
         request_id=request_id,
-        client_host=request.client.host if request.client else None
+        client_host=request.client.host if request.client else None,
+        origin=request.headers.get("origin")
     )
     
     try:
@@ -376,14 +455,150 @@ async def liveness_check() -> Dict[str, str]:
     """
     return {"status": "alive"}
 
+# CORS test endpoint
+@app.get("/cors-test", tags=["System"])
+async def cors_test(request: Request) -> Dict[str, Any]:
+    """
+    Comprehensive CORS configuration test endpoint.
+    """
+    return {
+        "message": "CORS is working!",
+        "timestamp": datetime.utcnow().isoformat(),
+        "cors_config": {
+            "origins": settings.CORS_ORIGINS,
+            "debug_mode": settings.API_DEBUG_MODE,
+            "allow_credentials": False,
+            "allow_methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"]
+        },
+        "request_info": {
+            "method": request.method,
+            "origin": request.headers.get("origin"),
+            "host": request.headers.get("host"),
+            "user_agent": request.headers.get("user-agent", "")[:100],
+            "headers": dict(request.headers)
+        }
+    }
 
-# Include API routes
-from api.routes import router as api_router
-from api.audio_transcription_routes import router as audio_router
+# Simple API test endpoint
+@app.get("/api/test", tags=["System"])
+async def api_test() -> Dict[str, Any]:
+    """
+    Simple API test endpoint to verify the API is working.
+    """
+    return {
+        "message": "Vision8 Backend API is operational",
+        "version": "1.0.0",
+        "timestamp": datetime.utcnow().isoformat(),
+        "environment": "production" if not settings.API_DEBUG_MODE else "development",
+        "services_available": {
+            "elasticsearch": service_registry.elasticsearch is not None,
+            "metadata_generator": service_registry.metadata_generator is not None,
+            "cache_service": service_registry.cache_service is not None
+        }
+    }
 
-app.include_router(api_router, prefix="/api/v1")
-app.include_router(audio_router)
+# Explicit OPTIONS handler for all API routes
+@app.options("/api/v1/{path:path}")
+async def options_api_handler(request: Request, path: str):
+    """Handle OPTIONS requests for all API routes"""
+    origin = request.headers.get("origin")
+    allowed_origin = origin if origin in settings.CORS_ORIGINS else settings.CORS_ORIGINS[0]
+    
+    return JSONResponse(
+        content={"message": "CORS preflight successful"},
+        headers={
+            "Access-Control-Allow-Origin": allowed_origin,
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH",
+            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Max-Age": "3600",
+        }
+    )
 
+
+# Include API routes with error handling
+try:
+    from api.routes import router as api_router
+    app.include_router(api_router, prefix="/api/v1")
+    logger.info("✅ Main API routes loaded")
+except Exception as e:
+    logger.error("❌ Failed to load main API routes", error=str(e))
+
+try:
+    from api.audio_transcription_routes import router as audio_router
+    app.include_router(audio_router)
+    logger.info("✅ Audio transcription routes loaded")
+except Exception as e:
+    logger.error("❌ Failed to load audio transcription routes", error=str(e))
+
+try:
+    from api.video_analysis_routes import router as video_analysis_router
+    app.include_router(video_analysis_router, prefix="/api/v1")
+    logger.info("✅ Video analysis routes loaded")
+except Exception as e:
+    logger.error("❌ Failed to load video analysis routes", error=str(e))
+
+
+# CORS preflight handler
+@app.options("/{path:path}")
+async def options_handler(request: Request, path: str):
+    """Handle CORS preflight requests"""
+    origin = request.headers.get("origin")
+    allowed_origin = origin if origin in settings.CORS_ORIGINS else settings.CORS_ORIGINS[0]
+    
+    return JSONResponse(
+        content={},
+        headers={
+            "Access-Control-Allow-Origin": allowed_origin,
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, HEAD",
+            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Max-Age": "3600",
+        }
+    )
+
+# API Status endpoint
+@app.get("/api/status", tags=["System"])
+async def api_status() -> Dict[str, Any]:
+    """
+    API status endpoint with comprehensive information.
+    """
+    try:
+        # Check service health
+        es_healthy = False
+        if service_registry.elasticsearch:
+            try:
+                es_healthy = service_registry.elasticsearch.es_client.ping()
+            except:
+                pass
+        
+        return {
+            "name": "Vision8 Backend API",
+            "version": "1.0.0",
+            "status": "operational",
+            "description": "Intelligent video processing and AI-powered scene generation",
+            "documentation": f"{settings.API_BASE_URL}/api/docs",
+            "redoc": f"{settings.API_BASE_URL}/api/redoc",
+            "endpoints": {
+                "health": f"{settings.API_BASE_URL}/health",
+                "cors_test": f"{settings.API_BASE_URL}/cors-test",
+                "video_analysis": f"{settings.API_BASE_URL}/api/v1/analysis/upload",
+                "search": f"{settings.API_BASE_URL}/api/v1/analysis/search"
+            },
+            "services": {
+                "elasticsearch": "connected" if es_healthy else "disconnected",
+                "metadata_generator": "active" if service_registry.metadata_generator else "inactive",
+                "cache_service": "active" if service_registry.cache_service else "inactive"
+            },
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        return {
+            "name": "Vision8 Backend API",
+            "version": "1.0.0",
+            "status": "error",
+            "error": str(e),
+            "documentation": f"{settings.API_BASE_URL}/api/docs",
+            "timestamp": datetime.utcnow().isoformat()
+        }
 
 # Root endpoint
 @app.get("/", tags=["System"])
@@ -395,7 +610,8 @@ async def root() -> Dict[str, str]:
         "name": "Vision8 Backend API",
         "version": "1.0.0",
         "description": "Intelligent video processing and AI-powered scene generation",
-        "documentation": f"http://{settings.API_HOST}:{settings.API_PORT}/api/docs" if settings.API_DEBUG_MODE else "Contact admin for API documentation"
+        "documentation": f"{settings.API_BASE_URL}/api/docs",
+        "status_endpoint": f"{settings.API_BASE_URL}/api/status"
     }
 
 

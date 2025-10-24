@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Safari } from './ui/safari';
+import './card.css';
 
 // Infinity SVG Icon Component
 const InfinityIcon: React.FC<{ className?: string; style?: React.CSSProperties }> = ({ className = "w-8 h-8", style }) => (
@@ -181,19 +182,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
             <InfinityIcon className="w-6 h-6" style={{ color: '#ffffff' }} />
           </div>
 
-          {/* Top Right - API Docs, GitHub and Login */}
+          {/* Top Right - GitHub and Login */}
           <div className="flex items-center space-x-6">
-            <a
-              href="http://localhost:8000/api/docs"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center space-x-2 px-3 py-2 hover:bg-white/10 rounded-lg transition-all duration-200"
-              style={{ color: '#ffffff' }}
-              title="API Documentation"
-            >
-              <ApiIcon className="w-5 h-5" />
-              <span className="text-sm font-medium hidden sm:inline">API Docs</span>
-            </a>
             <a
               href="https://github.com/nadinev6/Vision8?tab=readme-ov-file#readme"
               target="_blank"
@@ -233,21 +223,21 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
                 </div>
 
                 {/* Overlay Taglines */}
-                <div className="absolute inset-0 flex flex-col lg:flex-row justify-between items-start lg:items-end p-8 lg:p-16 pointer-events-none z-20">
+                <div className="absolute inset-0 flex flex-col lg:flex-row justify-between items-start lg:items-end p-2 sm:p-4 md:p-6 lg:p-16 pointer-events-none z-20">
                   {/* Left Aligned Sub-tagline with Message Bubble */}
-                  <div className="pointer-events-auto left-0 w-max lg:-ml-48 ">
-                    <div className="bg-blue-100 rounded-2xl px-6 py-4 shadow-lg border border-blue-200/30">
-                      <p className="text-xl lg:text-2xl font-medium leading-relaxed text-gray-800">
-                        The conversational engine
-                        for video intelligence.
+                  <div className="pointer-events-auto left-0 w-max lg:-ml-24">
+                    <div className="bg-blue-100 rounded-lg sm:rounded-xl md:rounded-2xl px-2 py-1 sm:px-3 sm:py-2 md:px-4 md:py-3 lg:px-6 lg:py-4 shadow-lg border border-blue-200/30">
+                      <p className="text-xs sm:text-sm md:text-base lg:text-xl font-medium leading-relaxed text-gray-800">
+                        The conversational engine<br className="md:hidden" />
+                        <span className="hidden md:inline"> </span>for video intelligence.
                       </p>
                     </div>
                   </div>
 
                   {/* Right Aligned Main Tagline with Message Bubble - Moved further right and UP */}
-                  <div className="lg:w-2/5 lg:flex lg:justify-end lg:self-center mt-8 lg:-mt-16 pointer-events-auto -mr-12 lg:-mr-24">
-                    <div className="bg-blue-100 rounded-2xl px-6 py-4 shadow-lg border border-blue-200/30 lg:text-right">
-                      <p className="text-2xl lg:text-3xl font-medium leading-tight text-gray-800">
+                  <div className="lg:w-2/5 lg:flex lg:justify-end lg:self-center mt-2 sm:mt-3 md:mt-4 lg:-mt-16 pointer-events-auto -mr-1 sm:-mr-2 md:-mr-4 lg:-mr-24">
+                    <div className="bg-blue-100 rounded-lg sm:rounded-xl md:rounded-2xl px-2 py-1 sm:px-3 sm:py-2 md:px-4 md:py-3 lg:px-6 lg:py-4 shadow-lg border border-blue-200/30 lg:text-right">
+                      <p className="text-sm sm:text-base md:text-lg lg:text-2xl font-medium leading-tight text-gray-800">
                         The Future of<br />
                         Video Search.
                       </p>
@@ -259,29 +249,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
           </div>
         </main>
 
-        {/* Technology Stack Icons - Bottom Center */}
-        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-10">
-          <div className="flex items-center space-x-6 opacity-70 hover:opacity-100 transition-opacity duration-300 bg-black/20 backdrop-blur-sm rounded-lg px-4 py-2 shadow-lg">
-            <div className="flex items-center space-x-2">
-              <img src="/icons/google-cloud.svg" alt="Google Cloud" className="w-8 h-8 drop-shadow-md" />
-              <span className="text-sm font-medium text-white/90 hidden sm:inline drop-shadow-sm">Google Cloud</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <img src="/icons/elastic.svg" alt="Elasticsearch" className="w-8 h-8 drop-shadow-md" />
-              <span className="text-sm font-medium text-white/90 hidden sm:inline drop-shadow-sm">Elasticsearch</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <img src="/icons/redis.svg" alt="Redis Cache" className="w-8 h-8 drop-shadow-md" />
-              <span className="text-sm font-medium text-white/90 hidden sm:inline drop-shadow-sm">Redis</span>
-            </div>
-          </div>
-        </div>
-
         {/* Subtle Creative Strategy Text - FIXED OVERLAP */}
-        {/* Changed 'bottom-32' to 'bottom-8' and moved outside of main/max-width container
-          to be absolute to the main container (div.min-h-screen).
-          Also, adjusted position to bottom-left to prevent overlap with the bottom-right text.
-        */}
         <div className="absolute bottom-8 left-8 z-10">
           <p className="text-lg italic opacity-60" style={{ color: '#ffffff' }}>
             AI Deconstruction for Unfiltered Video
@@ -296,6 +264,261 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
             Every Frame
           </div>
         </div>
+      </div>
+
+      {/* Roadmap Section - Below the hero */}
+      <div className="bg-white font-sans">
+
+        {/* Roadmap Timeline */}
+        <div className="py-16">
+          <div className="max-w-6xl mx-auto px-4">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl font-bold text-gray-900 mb-4 font-sans">Roadmap</h2>
+              <p className="text-lg text-gray-600 max-w-2xl mx-auto font-sans">
+                From prototype to the world's leading video AI platform
+              </p>
+            </div>
+
+            <div className="relative">
+              {/* Timeline line */}
+              <div className="absolute left-1/2 transform -translate-x-px h-full w-0.5 bg-gray-300"></div>
+
+              {/* Phase 1 */}
+              <div className="relative flex items-center justify-between mb-16">
+                <div className="w-5/12 text-right pr-8">
+                  <div className="card" style={{ background: '#00ffa0', width: 'auto', maxWidth: '400px', marginLeft: 'auto' }}>
+                    <div className="pricing-block-content">
+                      <h3 className="pricing-plan">Phase 1: Infrastructure</h3>
+                      <div className="pricing-note" style={{ fontWeight: '600', marginBottom: '0.5rem' }}>Next 4 weeks</div>
+                      <ul className="check-list">
+                        <li className="check-list-item">
+                          <svg version="1.0" preserveAspectRatio="xMidYMid meet" height="16" viewBox="0 0 30 30.000001" width="16" xmlns="http://www.w3.org/2000/svg" style={{ color: '#05060f' }}>
+                            <path fillRule="nonzero" fillOpacity="1" d="M 27.5 7.53125 L 24.464844 4.542969 C 24.15625 4.238281 23.65625 4.238281 23.347656 4.542969 L 11.035156 16.667969 L 6.824219 12.523438 C 6.527344 12.230469 6 12.230469 5.703125 12.523438 L 2.640625 15.539062 C 2.332031 15.84375 2.332031 16.335938 2.640625 16.640625 L 10.445312 24.324219 C 10.59375 24.472656 10.796875 24.554688 11.007812 24.554688 C 11.214844 24.554688 11.417969 24.472656 11.566406 24.324219 L 27.5 8.632812 C 27.648438 8.488281 27.734375 8.289062 27.734375 8.082031 C 27.734375 7.875 27.648438 7.679688 27.5 7.53125 Z M 27.5 7.53125" fill="#05060f" />
+                          </svg>
+                          Migrate to cost-effective vector database
+                        </li>
+                        <li className="check-list-item">
+                          <svg version="1.0" preserveAspectRatio="xMidYMid meet" height="16" viewBox="0 0 30 30.000001" width="16" xmlns="http://www.w3.org/2000/svg" style={{ color: '#05060f' }}>
+                            <path fillRule="nonzero" fillOpacity="1" d="M 27.5 7.53125 L 24.464844 4.542969 C 24.15625 4.238281 23.65625 4.238281 23.347656 4.542969 L 11.035156 16.667969 L 6.824219 12.523438 C 6.527344 12.230469 6 12.230469 5.703125 12.523438 L 2.640625 15.539062 C 2.332031 15.84375 2.332031 16.335938 2.640625 16.640625 L 10.445312 24.324219 C 10.59375 24.472656 10.796875 24.554688 11.007812 24.554688 C 11.214844 24.554688 11.417969 24.472656 11.566406 24.324219 L 27.5 8.632812 C 27.648438 8.488281 27.734375 8.289062 27.734375 8.082031 C 27.734375 7.875 27.648438 7.679688 27.5 7.53125 Z M 27.5 7.53125" fill="#05060f" />
+                          </svg>
+                          Optimize deployment (80% cost reduction)
+                        </li>
+                        <li className="check-list-item">
+                          <svg version="1.0" preserveAspectRatio="xMidYMid meet" height="16" viewBox="0 0 30 30.000001" width="16" xmlns="http://www.w3.org/2000/svg" style={{ color: '#05060f' }}>
+                            <path fillRule="nonzero" fillOpacity="1" d="M 27.5 7.53125 L 24.464844 4.542969 C 24.15625 4.238281 23.65625 4.238281 23.347656 4.542969 L 11.035156 16.667969 L 6.824219 12.523438 C 6.527344 12.230469 6 12.230469 5.703125 12.523438 L 2.640625 15.539062 C 2.332031 15.84375 2.332031 16.335938 2.640625 16.640625 L 10.445312 24.324219 C 10.59375 24.472656 10.796875 24.554688 11.007812 24.554688 C 11.214844 24.554688 11.417969 24.472656 11.566406 24.324219 L 27.5 8.632812 C 27.648438 8.488281 27.734375 8.289062 27.734375 8.082031 C 27.734375 7.875 27.648438 7.679688 27.5 7.53125 Z M 27.5 7.53125" fill="#05060f" />
+                          </svg>
+                          Enhanced performance and reliability
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+                <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center z-10 transition-colors duration-300 cursor-pointer hover:bg-red-400" style={{ 'backgroundColor': 'rgb(37 99 235)', '--tw-bg-opacity': '1' } as React.CSSProperties} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#ff6b6b'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgb(37 99 235)'}>
+                  <span className="text-white font-bold font-sans">1</span>
+                </div>
+                <div className="w-5/12"></div>
+              </div>
+
+              {/* Phase 2 */}
+              <div className="relative flex items-center justify-between mb-16">
+                <div className="w-5/12"></div>
+                <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center z-10 transition-colors duration-300 cursor-pointer" style={{ 'backgroundColor': 'rgb(147 51 234)', '--tw-bg-opacity': '1' } as React.CSSProperties} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#ff6b6b'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgb(147 51 234)'}>
+                  <span className="text-white font-bold font-sans">2</span>
+                </div>
+                <div className="w-5/12 pl-8">
+                  <div className="card" style={{ background: '#ff6b9d', width: 'auto', maxWidth: '400px' }}>
+                    <div className="pricing-block-content">
+                      <h3 className="pricing-plan">Phase 2: Business Launch</h3>
+                      <div className="pricing-note" style={{ fontWeight: '600', marginBottom: '0.5rem' }}>1-2 months</div>
+                      <ul className="check-list">
+                        <li className="check-list-item">
+                          <svg version="1.0" preserveAspectRatio="xMidYMid meet" height="16" viewBox="0 0 30 30.000001" width="16" xmlns="http://www.w3.org/2000/svg" style={{ color: '#05060f' }}>
+                            <path fillRule="nonzero" fillOpacity="1" d="M 27.5 7.53125 L 24.464844 4.542969 C 24.15625 4.238281 23.65625 4.238281 23.347656 4.542969 L 11.035156 16.667969 L 6.824219 12.523438 C 6.527344 12.230469 6 12.230469 5.703125 12.523438 L 2.640625 15.539062 C 2.332031 15.84375 2.332031 16.335938 2.640625 16.640625 L 10.445312 24.324219 C 10.59375 24.472656 10.796875 24.554688 11.007812 24.554688 C 11.214844 24.554688 11.417969 24.472656 11.566406 24.324219 L 27.5 8.632812 C 27.648438 8.488281 27.734375 8.289062 27.734375 8.082031 C 27.734375 7.875 27.648438 7.679688 27.5 7.53125 Z M 27.5 7.53125" fill="#05060f" />
+                          </svg>
+                          User accounts and authentication
+                        </li>
+                        <li className="check-list-item">
+                          <svg version="1.0" preserveAspectRatio="xMidYMid meet" height="16" viewBox="0 0 30 30.000001" width="16" xmlns="http://www.w3.org/2000/svg" style={{ color: '#05060f' }}>
+                            <path fillRule="nonzero" fillOpacity="1" d="M 27.5 7.53125 L 24.464844 4.542969 C 24.15625 4.238281 23.65625 4.238281 23.347656 4.542969 L 11.035156 16.667969 L 6.824219 12.523438 C 6.527344 12.230469 6 12.230469 5.703125 12.523438 L 2.640625 15.539062 C 2.332031 15.84375 2.332031 16.335938 2.640625 16.640625 L 10.445312 24.324219 C 10.59375 24.472656 10.796875 24.554688 11.007812 24.554688 C 11.214844 24.554688 11.417969 24.472656 11.566406 24.324219 L 27.5 8.632812 C 27.648438 8.488281 27.734375 8.289062 27.734375 8.082031 C 27.734375 7.875 27.648438 7.679688 27.5 7.53125 Z M 27.5 7.53125" fill="#05060f" />
+                          </svg>
+                          Subscription plans and billing
+                        </li>
+                        <li className="check-list-item">
+                          <svg version="1.0" preserveAspectRatio="xMidYMid meet" height="16" viewBox="0 0 30 30.000001" width="16" xmlns="http://www.w3.org/2000/svg" style={{ color: '#05060f' }}>
+                            <path fillRule="nonzero" fillOpacity="1" d="M 27.5 7.53125 L 24.464844 4.542969 C 24.15625 4.238281 23.65625 4.238281 23.347656 4.542969 L 11.035156 16.667969 L 6.824219 12.523438 C 6.527344 12.230469 6 12.230469 5.703125 12.523438 L 2.640625 15.539062 C 2.332031 15.84375 2.332031 16.335938 2.640625 16.640625 L 10.445312 24.324219 C 10.59375 24.472656 10.796875 24.554688 11.007812 24.554688 C 11.214844 24.554688 11.417969 24.472656 11.566406 24.324219 L 27.5 8.632812 C 27.648438 8.488281 27.734375 8.289062 27.734375 8.082031 C 27.734375 7.875 27.648438 7.679688 27.5 7.53125 Z M 27.5 7.53125" fill="#05060f" />
+                          </svg>
+                          Video library management
+                        </li>
+                        <li className="check-list-item">
+                          <svg version="1.0" preserveAspectRatio="xMidYMid meet" height="16" viewBox="0 0 30 30.000001" width="16" xmlns="http://www.w3.org/2000/svg" style={{ color: '#05060f' }}>
+                            <path fillRule="nonzero" fillOpacity="1" d="M 27.5 7.53125 L 24.464844 4.542969 C 24.15625 4.238281 23.65625 4.238281 23.347656 4.542969 L 11.035156 16.667969 L 6.824219 12.523438 C 6.527344 12.230469 6 12.230469 5.703125 12.523438 L 2.640625 15.539062 C 2.332031 15.84375 2.332031 16.335938 2.640625 16.640625 L 10.445312 24.324219 C 10.59375 24.472656 10.796875 24.554688 11.007812 24.554688 C 11.214844 24.554688 11.417969 24.472656 11.566406 24.324219 L 27.5 8.632812 C 27.648438 8.488281 27.734375 8.289062 27.734375 8.082031 C 27.734375 7.875 27.648438 7.679688 27.5 7.53125 Z M 27.5 7.53125" fill="#05060f" />
+                          </svg>
+                          Public beta launch
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Phase 3 */}
+              <div className="relative flex items-center justify-between mb-16">
+                <div className="w-5/12 text-right pr-8">
+                  <div className="card" style={{ background: '#4ecdc4', width: 'auto', maxWidth: '400px', marginLeft: 'auto' }}>
+                    <div className="pricing-block-content">
+                      <h3 className="pricing-plan">Phase 3: Advanced Features</h3>
+                      <div className="pricing-note" style={{ fontWeight: '600', marginBottom: '0.5rem' }}>2-4 months</div>
+                      <ul className="check-list">
+                        <li className="check-list-item">
+                          <svg version="1.0" preserveAspectRatio="xMidYMid meet" height="16" viewBox="0 0 30 30.000001" width="16" xmlns="http://www.w3.org/2000/svg" style={{ color: '#05060f' }}>
+                            <path fillRule="nonzero" fillOpacity="1" d="M 27.5 7.53125 L 24.464844 4.542969 C 24.15625 4.238281 23.65625 4.238281 23.347656 4.542969 L 11.035156 16.667969 L 6.824219 12.523438 C 6.527344 12.230469 6 12.230469 5.703125 12.523438 L 2.640625 15.539062 C 2.332031 15.84375 2.332031 16.335938 2.640625 16.640625 L 10.445312 24.324219 C 10.59375 24.472656 10.796875 24.554688 11.007812 24.554688 C 11.214844 24.554688 11.417969 24.472656 11.566406 24.324219 L 27.5 8.632812 C 27.648438 8.488281 27.734375 8.289062 27.734375 8.082031 C 27.734375 7.875 27.648438 7.679688 27.5 7.53125 Z M 27.5 7.53125" fill="#05060f" />
+                          </svg>
+                          AI video generation (Veo-3, Sora-2)
+                        </li>
+                        <li className="check-list-item">
+                          <svg version="1.0" preserveAspectRatio="xMidYMid meet" height="16" viewBox="0 0 30 30.000001" width="16" xmlns="http://www.w3.org/2000/svg" style={{ color: '#05060f' }}>
+                            <path fillRule="nonzero" fillOpacity="1" d="M 27.5 7.53125 L 24.464844 4.542969 C 24.15625 4.238281 23.65625 4.238281 23.347656 4.542969 L 11.035156 16.667969 L 6.824219 12.523438 C 6.527344 12.230469 6 12.230469 5.703125 12.523438 L 2.640625 15.539062 C 2.332031 15.84375 2.332031 16.335938 2.640625 16.640625 L 10.445312 24.324219 C 10.59375 24.472656 10.796875 24.554688 11.007812 24.554688 C 11.214844 24.554688 11.417969 24.472656 11.566406 24.324219 L 27.5 8.632812 C 27.648438 8.488281 27.734375 8.289062 27.734375 8.082031 C 27.734375 7.875 27.648438 7.679688 27.5 7.53125 Z M 27.5 7.53125" fill="#05060f" />
+                          </svg>
+                          Team collaboration tools
+                        </li>
+                        <li className="check-list-item">
+                          <svg version="1.0" preserveAspectRatio="xMidYMid meet" height="16" viewBox="0 0 30 30.000001" width="16" xmlns="http://www.w3.org/2000/svg" style={{ color: '#05060f' }}>
+                            <path fillRule="nonzero" fillOpacity="1" d="M 27.5 7.53125 L 24.464844 4.542969 C 24.15625 4.238281 23.65625 4.238281 23.347656 4.542969 L 11.035156 16.667969 L 6.824219 12.523438 C 6.527344 12.230469 6 12.230469 5.703125 12.523438 L 2.640625 15.539062 C 2.332031 15.84375 2.332031 16.335938 2.640625 16.640625 L 10.445312 24.324219 C 10.59375 24.472656 10.796875 24.554688 11.007812 24.554688 C 11.214844 24.554688 11.417969 24.472656 11.566406 24.324219 L 27.5 8.632812 C 27.648438 8.488281 27.734375 8.289062 27.734375 8.082031 C 27.734375 7.875 27.648438 7.679688 27.5 7.53125 Z M 27.5 7.53125" fill="#05060f" />
+                          </svg>
+                          API for developers
+                        </li>
+                        <li className="check-list-item">
+                          <svg version="1.0" preserveAspectRatio="xMidYMid meet" height="16" viewBox="0 0 30 30.000001" width="16" xmlns="http://www.w3.org/2000/svg" style={{ color: '#05060f' }}>
+                            <path fillRule="nonzero" fillOpacity="1" d="M 27.5 7.53125 L 24.464844 4.542969 C 24.15625 4.238281 23.65625 4.238281 23.347656 4.542969 L 11.035156 16.667969 L 6.824219 12.523438 C 6.527344 12.230469 6 12.230469 5.703125 12.523438 L 2.640625 15.539062 C 2.332031 15.84375 2.332031 16.335938 2.640625 16.640625 L 10.445312 24.324219 C 10.59375 24.472656 10.796875 24.554688 11.007812 24.554688 C 11.214844 24.554688 11.417969 24.472656 11.566406 24.324219 L 27.5 8.632812 C 27.648438 8.488281 27.734375 8.289062 27.734375 8.082031 C 27.734375 7.875 27.648438 7.679688 27.5 7.53125 Z M 27.5 7.53125" fill="#05060f" />
+                          </svg>
+                          Advanced analytics
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+                <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center z-10 transition-colors duration-300 cursor-pointer" style={{ 'backgroundColor': 'rgb(22 163 74)', '--tw-bg-opacity': '1' } as React.CSSProperties} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#ff6b6b'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgb(22 163 74)'}>
+                  <span className="text-white font-bold font-sans">3</span>
+                </div>
+                <div className="w-5/12"></div>
+              </div>
+
+              {/* Phase 4 */}
+              <div className="relative flex items-center justify-between">
+                <div className="w-5/12"></div>
+                <div className="w-10 h-10 bg-orange-600 rounded-full flex items-center justify-center z-10 transition-colors duration-300 cursor-pointer" style={{ 'backgroundColor': 'rgb(234 88 12)', '--tw-bg-opacity': '1' } as React.CSSProperties} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#ff6b6b'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgb(234 88 12)'}>
+                  <span className="text-white font-bold font-sans">4</span>
+                </div>
+                <div className="w-5/12 pl-8">
+                  <div className="card" style={{ background: '#ffa726', width: 'auto', maxWidth: '400px' }}>
+                    <div className="pricing-block-content">
+                      <h3 className="pricing-plan">Phase 4: Scale & Growth</h3>
+                      <div className="pricing-note" style={{ fontWeight: '600', marginBottom: '0.5rem' }}>4-6 months</div>
+                      <ul className="check-list">
+                        <li className="check-list-item">
+                          <svg version="1.0" preserveAspectRatio="xMidYMid meet" height="16" viewBox="0 0 30 30.000001" width="16" xmlns="http://www.w3.org/2000/svg" style={{ color: '#05060f' }}>
+                            <path fillRule="nonzero" fillOpacity="1" d="M 27.5 7.53125 L 24.464844 4.542969 C 24.15625 4.238281 23.65625 4.238281 23.347656 4.542969 L 11.035156 16.667969 L 6.824219 12.523438 C 6.527344 12.230469 6 12.230469 5.703125 12.523438 L 2.640625 15.539062 C 2.332031 15.84375 2.332031 16.335938 2.640625 16.640625 L 10.445312 24.324219 C 10.59375 24.472656 10.796875 24.554688 11.007812 24.554688 C 11.214844 24.554688 11.417969 24.472656 11.566406 24.324219 L 27.5 8.632812 C 27.648438 8.488281 27.734375 8.289062 27.734375 8.082031 C 27.734375 7.875 27.648438 7.679688 27-5 7.53125 Z M 27.5 7.53125" fill="#05060f" />
+                          </svg>
+                          Enterprise features and SSO
+                        </li>
+                        <li className="check-list-item">
+                          <svg version="1.0" preserveAspectRatio="xMidYMid meet" height="16" viewBox="0 0 30 30.000001" width="16" xmlns="http://www.w3.org/2000/svg" style={{ color: '#05060f' }}>
+                            <path fillRule="nonzero" fillOpacity="1" d="M 27.5 7.53125 L 24.464844 4.542969 C 24.15625 4.238281 23.65625 4.238281 23.347656 4.542969 L 11.035156 16.667969 L 6.824219 12.523438 C 6.527344 12.230469 6 12.230469 5.703125 12.523438 L 2.640625 15.539062 C 2.332031 15.84375 2.332031 16.335938 2.640625 16.640625 L 10.445312 24.324219 C 10.59375 24.472656 10.796875 24.554688 11.007812 24.554688 C 11.214844 24.554688 11.417969 24.472656 11.566406 24.324219 L 27.5 8.632812 C 27.648438 8.488281 27.734375 8.289062 27.734375 8.082031 C 27.734375 7.875 27.648438 7.679688 27.5 7.53125 Z M 27.5 7.53125" fill="#05060f" />
+                          </svg>
+                          Mobile applications
+                        </li>
+                        <li className="check-list-item">
+                          <svg version="1.0" preserveAspectRatio="xMidYMid meet" height="16" viewBox="0 0 30 30.000001" width="16" xmlns="http://www.w3.org/2000/svg" style={{ color: '#05060f' }}>
+                            <path fillRule="nonzero" fillOpacity="1" d="M 27.5 7.53125 L 24.464844 4.542969 C 24.15625 4.238281 23.65625 4.238281 23.347656 4.542969 L 11.035156 16.667969 L 6.824219 12.523438 C 6.527344 12.230469 6 12.230469 5.703125 12.523438 L 2.640625 15.539062 C 2.332031 15.84375 2.332031 16.335938 2.640625 16.640625 L 10.445312 24.324219 C 10.59375 24.472656 10.796875 24.554688 11.007812 24.554688 C 11.214844 24.554688 11.417969 24.472656 11.566406 24.324219 L 27.5 8.632812 C 27.648438 8.488281 27.734375 8.289062 27.734375 8.082031 C 27.734375 7.875 27.648438 7.679688 27.5 7.53125 Z M 27.5 7.53125" fill="#05060f" />
+                          </svg>
+                          Global infrastructure
+                        </li>
+                        <li className="check-list-item">
+                          <svg version="1.0" preserveAspectRatio="xMidYMid meet" height="16" viewBox="0 0 30 30.000001" width="16" xmlns="http://www.w3.org/2000/svg" style={{ color: '#05060f' }}>
+                            <path fillRule="nonzero" fillOpacity="1" d="M 27.5 7.53125 L 24.464844 4.542969 C 24.15625 4.238281 23.65625 4.238281 23.347656 4.542969 L 11.035156 16.667969 L 6.824219 12.523438 C 6.527344 12.230469 6 12.230469 5.703125 12.523438 L 2.640625 15.539062 C 2.332031 15.84375 2.332031 16.335938 2.640625 16.640625 L 10.445312 24.324219 C 10.59375 24.472656 10.796875 24.554688 11.007812 24.554688 C 11.214844 24.554688 11.417969 24.472656 11.566406 24.324219 L 27.5 8.632812 C 27.648438 8.488281 27.734375 8.289062 27.734375 8.082031 C 27.734375 7.875 27.648438 7.679688 27.5 7.53125 Z M 27.5 7.53125" fill="#05060f" />
+                          </svg>
+                          Industry partnerships
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+
+
+
+
+        {/* Footer */}
+        <footer className="bg-white rounded-lg shadow-sm m-4 dark:bg-gray-800">
+          <div className="w-full mx-auto max-w-screen-xl p-4">
+            {/* Top row with copyright and links */}
+            <div className="md:flex md:items-center md:justify-between">
+              <span className="text-sm text-gray-500 sm:text-center dark:text-gray-400 flex items-center">
+                © 2025
+                <div className="flex items-center space-x-1 mx-1">
+                  <span className="font-bold tracking-tight">VISION</span>
+                  <InfinityIcon className="w-4 h-4" />
+                </div>
+                . All Rights Reserved.
+              </span>
+              <ul className="flex flex-wrap items-center mt-3 text-sm font-medium text-gray-500 dark:text-gray-400 sm:mt-0">
+                <li>
+                  <a
+                    href={import.meta.env?.VITE_BACKEND_URL ? `${import.meta.env.VITE_BACKEND_URL}/api/docs` : "https://vision8-backend-xyz-uc.a.run.app/api/docs"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:underline me-4 md:me-6"
+                  >
+                    API Docs
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="https://github.com/nadinev6/Vision8?tab=readme-ov-file#readme"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:underline me-4 md:me-6"
+                  >
+                    GitHub
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="mailto:nadine@techie.com"
+                    className="hover:underline"
+                  >
+                    Contact
+                  </a>
+                </li>
+              </ul>
+            </div>
+
+            {/* Technology Stack - Centered at bottom */}
+            <div className="border-t border-gray-200 dark:border-gray-700 mt-4 pt-4">
+              <div className="text-center">
+                <p className="text-xs text-gray-400 mb-3 font-sans">Powered by</p>
+                <div className="flex items-center justify-center space-x-6 opacity-70">
+                  <div className="flex items-center space-x-2">
+                    <img src="/icons/google-cloud.svg" alt="Google Cloud" className="w-5 h-5" />
+                    <span className="text-xs text-gray-400 font-sans">Google Cloud</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <img src="/icons/elastic.svg" alt="Elasticsearch" className="w-5 h-5" />
+                    <span className="text-xs text-gray-400 font-sans">Elasticsearch</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <img src="/icons/redis.svg" alt="Redis Cache" className="w-5 h-5" />
+                    <span className="text-xs text-gray-400 font-sans">Redis</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </footer>
       </div>
     </>
   );

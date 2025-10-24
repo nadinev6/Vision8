@@ -307,6 +307,8 @@ const AIChatInput: React.FC<AIChatInputProps> = ({ onVideoUpload, onAnalyze, isA
           onGenerate={onVideoGenerate}
           selectedFrameRange={{ start: 0, end: 100, duration: 3.33 }} // TODO: Get from video settings
           videoName="Current Video" // TODO: Get actual video name
+          videoId={currentVideoId}
+          sceneId={currentVideoId ? `${currentVideoId}_scene_001` : undefined}
         />
       )}
     </div>
