@@ -65,65 +65,22 @@ async def api_health() -> Dict[str, Any]:
         }
 
 
-# Test endpoint for Elasticsearch connection
+# Test endpoint for Elasticsearch connection - DISABLED
 @router.get("/test/elasticsearch")
 async def test_elasticsearch() -> Dict[str, Any]:
-    """Test Elasticsearch connection and basic functionality."""
-    try:
-        # Import Elasticsearch directly to avoid Redis dependency
-        from elasticsearch import Elasticsearch
-        import os
-        from dotenv import load_dotenv
-        
-        load_dotenv()
-        
-        # Get Elasticsearch configuration
-        elastic_url = os.getenv('ELASTIC_URL')
-        elastic_api_key = os.getenv('ELASTIC_API_KEY')
-        index_name = os.getenv('ELASTIC_INDEX', 'scene_segments')
-        
-        if not elastic_url or not elastic_api_key:
-            return {
-                "status": "error",
-                "error": "ELASTIC_URL and ELASTIC_API_KEY must be configured",
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        
-        # Initialize Elasticsearch client
-        es_client = Elasticsearch(
-            elastic_url,
-            api_key=elastic_api_key,
-            verify_certs=True
-        )
-        
-        # Test connection
-        is_connected = es_client.ping()
-        
-        # Get cluster info
-        cluster_info = es_client.info() if is_connected else {}
-        
-        # Check if index exists
-        index_exists = es_client.indices.exists(index=index_name)
-        
-        return {
-            "status": "success",
-            "elasticsearch": {
-                "connected": is_connected,
-                "cluster_name": cluster_info.get("cluster_name", "unknown"),
-                "version": cluster_info.get("version", {}).get("number", "unknown"),
-                "index_name": index_name,
-                "index_exists": index_exists
-            },
-            "timestamp": datetime.utcnow().isoformat()
-        }
-        
-    except Exception as e:
-        logger.error("elasticsearch_test_failed", error=str(e))
-        return {
-            "status": "error",
-            "error": str(e),
-            "timestamp": datetime.utcnow().isoformat()
-        }
+    """Elasticsearch testing disabled - service removed to eliminate costs."""
+    return {
+        "status": "disabled",
+        "message": "Elasticsearch testing disabled to eliminate cloud costs",
+        "elasticsearch": {
+            "connected": False,
+            "cluster_name": "disabled",
+            "version": "N/A",
+            "index_name": "N/A",
+            "index_exists": False
+        },
+        "timestamp": datetime.utcnow().isoformat()
+    }
 
 
 # Test endpoint for embedding generation
@@ -331,73 +288,24 @@ async def test_integration() -> Dict[str, Any]:
             "error": str(e)
         }
     
-    # Test Elasticsearch with detailed debugging
-    try:
-        from elasticsearch import Elasticsearch
-        import os
-        
-        elastic_url = os.getenv('ELASTIC_URL')
-        elastic_api_key = os.getenv('ELASTIC_API_KEY')
-        
-        results["services"]["elasticsearch"] = {
-            "url": elastic_url,
-            "has_api_key": bool(elastic_api_key)
-        }
-        
-        if elastic_url and elastic_api_key:
-            # Try different URL formats
-            urls_to_try = [
-                elastic_url,
-                elastic_url.replace(':443', ''),
-                elastic_url.replace('https://', '').replace(':443', '')
-            ]
-            
-            for url in urls_to_try:
-                try:
-                    if not url.startswith('https://'):
-                        url = f"https://{url}"
-                    
-                    es_client = Elasticsearch(
-                        url,
-                        api_key=elastic_api_key,
-                        verify_certs=True,
-                        timeout=10
-                    )
-                    
-                    if es_client.ping():
-                        cluster_info = es_client.info()
-                        results["services"]["elasticsearch"].update({
-                            "status": "success",
-                            "working_url": url,
-                            "cluster_name": cluster_info.get("cluster_name"),
-                            "version": cluster_info.get("version", {}).get("number")
-                        })
-                        break
-                        
-                except Exception as url_error:
-                    results["services"]["elasticsearch"][f"error_{url}"] = str(url_error)
-            
-            if "status" not in results["services"]["elasticsearch"]:
-                results["services"]["elasticsearch"]["status"] = "error"
-                results["services"]["elasticsearch"]["error"] = "All URL formats failed"
-        else:
-            results["services"]["elasticsearch"]["status"] = "error"
-            results["services"]["elasticsearch"]["error"] = "Missing configuration"
-            
-    except Exception as e:
-        results["services"]["elasticsearch"] = {
-            "status": "error",
-            "error": str(e)
-        }
+    # Elasticsearch testing disabled
+    results["services"]["elasticsearch"] = {
+        "status": "disabled",
+        "message": "Elasticsearch disabled to eliminate cloud costs",
+        "url": None,
+        "has_api_key": False
+    }
     
-    # Overall status
-    all_services = [results["services"].get(svc, {}).get("status") for svc in ["embeddings", "langcache", "elasticsearch"]]
+    # Overall status (excluding Elasticsearch)
+    all_services = [results["services"].get(svc, {}).get("status") for svc in ["embeddings", "langcache"]]
     if all(status == "success" for status in all_services):
-        results["overall_status"] = "all_systems_operational"
+        results["overall_status"] = "core_systems_operational"
     elif any(status == "success" for status in all_services):
         results["overall_status"] = "partial_systems_operational"
     else:
         results["overall_status"] = "systems_down"
+
+    results["note"] = "Elasticsearch disabled to eliminate cloud costs - core functionality remains"
     
     return results
 

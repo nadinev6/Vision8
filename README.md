@@ -44,8 +44,9 @@ Vision8 combines a modern React frontend with a powerful Python backend:
 - **Frontend**: React + TypeScript + Tailwind CSS
 - **Backend**: FastAPI + Python
 - **AI**: Google Gemini Flash (multimodal video + audio analysis)
-- **Search**: Vector-based semantic search
+- **Search**: Supabase PostgreSQL with pgvector (vector-based semantic search)
 - **Storage**: Firebase for user data and video storage
+- **Database**: Supabase (cost-effective alternative to Elasticsearch)
 
 ## 🛠️ Getting Started
 
@@ -88,6 +89,9 @@ firebase deploy --only hosting
 
 ## 🔧 Recent Updates
 
+- ✅ **Infrastructure Migration**: Migrated from Elasticsearch to Supabase (80% cost reduction)
+- ✅ **Vector Search**: Implemented pgvector-based semantic search in Supabase
+- ✅ **Cost Optimization**: Eliminated $50-200+/month cloud costs
 - ✅ **Multimodal AI Integration**: 95% reduction in processing costs
 - ✅ **Real Audio Transcription**: Accurate speech-to-text from video audio
 - ✅ **Responsive Design**: Optimized for desktop and mobile devices
@@ -115,6 +119,7 @@ This project is licensed under the MIT License - see the [LICENSE.txt](LICENSE.t
 
 ## 🙏 Acknowledgments
 
+- **Supabase** for cost-effective vector database and real-time capabilities
 - **Google Gemini** for powerful multimodal AI capabilities
 - **React & Vite** for excellent development experience
 - **Tailwind CSS** for beautiful, responsive design

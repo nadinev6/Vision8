@@ -4,9 +4,9 @@ interface ImportMetaEnv {
   readonly VITE_BACKEND_URL: string
   readonly VITE_API_BASE_URL: string
   readonly VITE_GEMINI_API_KEY: string
-  readonly VITE_ELASTIC_URL: string
-  readonly VITE_ELASTIC_API_KEY: string
-  readonly VITE_ELASTIC_INDEX: string
+  // readonly VITE_ELASTIC_URL: string - REMOVED TO ELIMINATE COSTS
+  // readonly VITE_ELASTIC_API_KEY: string - REMOVED TO ELIMINATE COSTS
+  // readonly VITE_ELASTIC_INDEX: string - REMOVED TO ELIMINATE COSTS
   readonly VITE_FIREBASE_API_KEY: string
   readonly VITE_FIREBASE_AUTH_DOMAIN: string
   readonly VITE_FIREBASE_PROJECT_ID: string

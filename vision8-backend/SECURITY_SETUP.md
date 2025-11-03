@@ -17,12 +17,12 @@
 
 3. Add Secret Variables in Cloud Build:
    ```bash
-   # Create secrets in Secret Manager
-   gcloud secrets create elastic-api-key --replication-policy="automatic"
+   # Create secrets in Secret Manager (Elasticsearch disabled to eliminate costs)
+   # gcloud secrets create elastic-api-key --replication-policy="automatic" - DISABLED
    gcloud secrets create gemini-api-key --replication-policy="automatic"
-   
-   # Store your secrets
-   echo "your-elastic-api-key" | gcloud secrets versions add elastic-api-key --data-file=-
+
+   # Store your secrets (Elasticsearch disabled to eliminate costs)
+   # echo "your-elastic-api-key" | gcloud secrets versions add elastic-api-key --data-file=- - DISABLED
    echo "your-gemini-api-key" | gcloud secrets versions add gemini-api-key --data-file=-
    ```
 
@@ -30,8 +30,8 @@
    - Click "Show Advanced Options"
    - Under "Substitutions", add:
      ```
-     _ELASTIC_URL = https://my-elasticsearch-project-dc9e71.es.us-central1.gcp.elastic-cloud.com:443
-     _ELASTIC_API_KEY = ${sm://projects/$PROJECT_ID/secrets/elastic-api-key}
+     # _ELASTIC_URL = https://my-elasticsearch-project-dc9e71.es.us-central1.gcp.elastic-cloud.com:443 - DISABLED TO ELIMINATE COSTS
+     # _ELASTIC_API_KEY = ${sm://projects/$PROJECT_ID/secrets/elastic-api-key} - DISABLED TO ELIMINATE COSTS
      _GEMINI_API_KEY = ${sm://projects/$PROJECT_ID/secrets/gemini-api-key}
      ```
 
@@ -39,7 +39,8 @@
 
 1. Access Elastic Cloud Console:
    ```
-   https://cloud.elastic.co/
+   # Elasticsearch cloud service disabled to eliminate costs
+   # https://cloud.elastic.co/ - DISABLED
    ```
 
 2. Configure Network Security:

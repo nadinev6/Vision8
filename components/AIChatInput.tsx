@@ -107,28 +107,28 @@ const AIChatInput: React.FC<AIChatInputProps> = ({ onVideoUpload, onAnalyze, isA
   const handleVideoSearch = async (query: string) => {
     try {
       console.log('Performing video search for:', query);
-      
-      // Perform hybrid search using Elasticsearch
+
+      // Perform hybrid search using Supabase (replaces Elasticsearch)
       const searchResults = await hybridSearch(query, currentVideoId, 5);
-      
+
       if (searchResults.length > 0) {
         console.log(`Found ${searchResults.length} search results`);
-        
+
         // Format search results for display
         const resultsText = searchResults.map((result, index) => {
           const scene = result.document;
           const timeInSeconds = scene.start_time_ms / 1000;
           return `**Result ${index + 1}** (${timeInSeconds.toFixed(1)}s): ${scene.scene_summary}`;
         }).join('\n\n');
-        
+
         const searchMessage = `**Video Search Results for "${query}":**\n\n${resultsText}`;
         onSendMessage(searchMessage);
-        
+
         // Optionally jump to the first result
         if (searchResults[0]) {
           const firstResultTime = searchResults[0].document.start_time_ms / 1000;
           console.log(`Jumping to first result at ${firstResultTime}s`);
-        
+
         }
       } else {
         console.log('No search results found');

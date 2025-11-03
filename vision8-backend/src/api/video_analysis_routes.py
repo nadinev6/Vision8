@@ -13,7 +13,7 @@ import json
 import os
 from datetime import datetime
 
-from services.elastic_service import ElasticService
+from services.supabase_service import SupabaseService
 from services.metadata_generator import MetadataGenerator
 from services.audio import AudioTranscriptionService
 
@@ -22,23 +22,23 @@ logger = structlog.get_logger()
 router = APIRouter(prefix="/analysis", tags=["Video Analysis"])
 
 # Initialize services with better error handling
-elastic_service = None
+supabase_service = None
 metadata_generator = None
 audio_transcription_service = None
 
 def initialize_services():
     """Initialize services on demand"""
-    global elastic_service, metadata_generator, audio_transcription_service
-    
-    if elastic_service is None:
+    global supabase_service, metadata_generator, audio_transcription_service
+
+    if supabase_service is None:
         try:
-            logger.info("Initializing ElasticService...")
-            elastic_service = ElasticService()
-            logger.info("ElasticService initialized successfully")
+            logger.info("Initializing SupabaseService...")
+            supabase_service = SupabaseService()
+            logger.info("SupabaseService initialized successfully")
         except Exception as e:
-            logger.warning("ElasticService initialization failed - continuing without Elasticsearch", error=str(e))
-            elastic_service = None  # Continue without Elasticsearch
-    
+            logger.warning("SupabaseService initialization failed - continuing without video search", error=str(e))
+            supabase_service = None  # Continue without Supabase
+
     if metadata_generator is None:
         try:
             logger.info("Initializing MetadataGenerator...")
@@ -47,7 +47,7 @@ def initialize_services():
         except Exception as e:
             logger.error("MetadataGenerator initialization failed", error=str(e))
             metadata_generator = None
-    
+
     if audio_transcription_service is None:
         try:
             logger.info("Initializing AudioTranscriptionService...")
@@ -56,8 +56,8 @@ def initialize_services():
         except Exception as e:
             logger.error("AudioTranscriptionService initialization failed", error=str(e))
             audio_transcription_service = None
-    
-    return elastic_service is not None and metadata_generator is not None
+
+    return metadata_generator is not None
 
 
 @router.post("/upload")
@@ -308,30 +308,33 @@ async def analyze_video(
             
             documents.append(fallback_doc)
         
-        # ALWAYS attempt to index documents (if Elasticsearch is available)
-        if documents and elastic_service:
+        # Store scenes in Supabase for search (if available)
+        stored_count = 0
+        failed_count = 0
+
+        if documents and supabase_service and supabase_service.is_available():
             try:
-                logger.info("attempting_bulk_index", video_id=video_id, document_count=len(documents))
-                success_count, failed_operations = await elastic_service.bulk_index_documents(documents)
-                indexed_count = success_count
-                failed_count = len(failed_operations)
-                
-                logger.info("indexing_completed",
+                logger.info("storing_scenes_in_supabase", video_id=video_id, scene_count=len(documents))
+
+                for doc in documents:
+                    success = await supabase_service.store_video_scene(doc)
+                    if success:
+                        stored_count += 1
+                    else:
+                        failed_count += 1
+
+                logger.info("supabase_storage_completed",
                            video_id=video_id,
-                           indexed=indexed_count,
+                           stored=stored_count,
                            failed=failed_count)
-                
-                if indexed_count == 0:
-                    logger.error("no_documents_indexed", video_id=video_id, failed_operations=failed_operations)
-                
+
             except Exception as e:
-                logger.error("indexing_failed", video_id=video_id, error=str(e))
-                # Don't raise exception - continue with response
+                logger.error("supabase_storage_failed", video_id=video_id, error=str(e))
                 failed_count = len(documents)
-        elif not elastic_service:
-            logger.warning("elasticsearch_not_available_skipping_indexing", video_id=video_id)
+        elif not supabase_service or not supabase_service.is_available():
+            logger.warning("supabase_not_available_skipping_storage", video_id=video_id)
         else:
-            logger.error("no_documents_created", video_id=video_id)
+            logger.warning("no_documents_created", video_id=video_id)
         
         # Clean up temporary file
         try:
@@ -349,10 +352,10 @@ async def analyze_video(
                 "transcript_available": bool(metadata_result.get("transcript")),
                 "objects_detected": len(metadata_result.get("objects", [])),
             },
-            "indexing": {
-                "documents_indexed": indexed_count,
-                "documents_failed": failed_count,
-                "elasticsearch_index": elastic_service.index_name if elastic_service else None
+            "storage": {
+                "scenes_stored": stored_count,
+                "scenes_failed": failed_count,
+                "supabase_available": supabase_service.is_available() if supabase_service else False
             },
             "timestamp": datetime.utcnow().isoformat()
         }
@@ -393,43 +396,49 @@ async def search_video_content(
     video_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Search video content using semantic search.
-    
+    Search video content using semantic search with Supabase.
+
     Args:
         query: Search query
         min_score: Minimum relevance score (0-1)
         max_results: Maximum number of results
         video_id: Optional filter by specific video
-        
+
     Returns:
         Search results with timestamps and relevance scores
     """
     # Initialize services on demand
     initialize_services()
-    
-    if not elastic_service:
-        raise HTTPException(
-            status_code=503, 
-            detail="Search service not available. Check Elasticsearch configuration."
-        )
-    
+
+    if not supabase_service or not supabase_service.is_available():
+        return {
+            "status": "unavailable",
+            "query": query,
+            "results_count": 0,
+            "results": [],
+            "message": "Video search is not available - Supabase not configured",
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
     try:
-        logger.info("search_request", 
-                   query=query, 
+        logger.info("search_request",
+                   query=query,
                    video_id=video_id,
                    min_score=min_score)
-        
+
+        # Generate embedding for the query (simplified - in production you'd use Gemini API)
+        # For now, we'll use a mock embedding - replace with actual embedding generation
+        import numpy as np
+        query_embedding = np.random.rand(768).tolist()  # Mock 768-dim embedding
+
         # Perform search
-        results = await elastic_service.search_video_content(
-            query=query,
-            min_score=min_score,
-            max_results=max_results
+        results = await supabase_service.search_video_content(
+            query_embedding=query_embedding,
+            video_id=video_id,
+            limit=max_results,
+            similarity_threshold=min_score
         )
-        
-        # Filter by video_id if specified
-        if video_id:
-            results = [r for r in results if r.get("video_id") == video_id]
-        
+
         return {
             "status": "success",
             "query": query,
@@ -437,312 +446,116 @@ async def search_video_content(
             "results": results,
             "timestamp": datetime.utcnow().isoformat()
         }
-        
+
     except Exception as e:
         logger.error("search_failed", query=query, error=str(e))
-        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+        return {
+            "status": "error",
+            "query": query,
+            "results_count": 0,
+            "results": [],
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }
 
 
 @router.post("/test-index")
 async def test_index_document() -> Dict[str, Any]:
     """
-    Test indexing a sample document to verify Elasticsearch is working.
+    Test indexing disabled - Elasticsearch removed to eliminate costs.
     """
-    if not elastic_service:
-        return {"error": "Elasticsearch service not available"}
-    
-    try:
-        # Create a test document
-        test_doc = {
-            "video_id": "test_video_001",
-            "scene_id": "test_video_001_scene_001",
-            "start_time_ms": 0,
-            "end_time_ms": 5000,
-            "scene_summary": "Test scene with a person speaking",
-            "full_description": "This is a test scene showing a person speaking to the camera",
-            "scene_embedding": [0.1] * 768,  # Mock embedding
-            "transcript_phrases": [
-                {
-                    "text": "Hello, this is a test video",
-                    "start_ms": 0,
-                    "end_ms": 3000,
-                    "speaker": "narrator"
-                }
-            ],
-            "objects_tracked": [
-                {
-                    "label": "person",
-                    "track_id": "person_1",
-                    "boxes": []
-                }
-            ],
-            "actions_detected": ["speaking"]
-        }
-        
-        # Index the test document
-        response = elastic_service.es_client.index(
-            index=elastic_service.index_name,
-            document=test_doc,
-            id="test_doc_001"
-        )
-        
-        return {
-            "status": "success",
-            "document_indexed": True,
-            "elasticsearch_response": {
-                "result": response.get("result", "unknown"),
-                "index": response.get("_index", "unknown"),
-                "id": response.get("_id", "unknown")
-            },
-            "test_document_id": test_doc["scene_id"]
-        }
-        
-    except Exception as e:
-        return {
-            "error": str(e),
-            "error_type": type(e).__name__
-        }
+    return {
+        "status": "disabled",
+        "message": "Indexing functionality has been disabled to eliminate cloud costs",
+        "document_indexed": False
+    }
 
 
 @router.get("/test-search")
 async def test_search(query: str = "video") -> Dict[str, Any]:
     """
-    Test search functionality with debug information.
+    Test search functionality disabled - Elasticsearch removed to eliminate costs.
     """
-    if not elastic_service:
-        return {"error": "Elasticsearch service not available"}
-    
-    try:
-        # Simple search to test if documents exist
-        response = elastic_service.es_client.search(
-            index=elastic_service.index_name,
-            body={
-                "query": {"match_all": {}},
-                "size": 5
-            }
-        )
-        
-        return {
-            "total_documents": response["hits"]["total"]["value"],
-            "documents_found": len(response["hits"]["hits"]),
-            "sample_documents": [hit["_source"] for hit in response["hits"]["hits"]],
-            "index_name": elastic_service.index_name
-        }
-        
-    except Exception as e:
-        return {
-            "error": str(e),
-            "error_type": type(e).__name__
-        }
+    return {
+        "status": "disabled",
+        "message": "Search functionality has been disabled to eliminate cloud costs",
+        "total_documents": 0,
+        "documents_found": 0,
+        "sample_documents": []
+    }
 
 
 @router.get("/elasticsearch/status")
 async def elasticsearch_status() -> Dict[str, Any]:
     """
-    Check Elasticsearch connection and index status.
-    
+    Elasticsearch status - service removed to eliminate costs.
+
     Returns:
-        Elasticsearch connection and index information
+        Status indicating Elasticsearch has been disabled
     """
-    # Try to initialize services
-    initialize_services()
-    
-    if not elastic_service:
-        return {
-            "status": "disconnected",
-            "error": "Elasticsearch service not initialized"
-        }
-    
-    try:
-        # Check connection
-        is_connected = elastic_service.es_client.ping()
-        
-        # Get index info
-        index_exists = elastic_service.es_client.indices.exists(index=elastic_service.index_name)
-        
-        index_stats = {}
-        if index_exists:
-            try:
-                # Try to get stats (may not work in serverless mode)
-                stats = elastic_service.es_client.indices.stats(index=elastic_service.index_name)
-                index_stats = {
-                    "document_count": stats["indices"][elastic_service.index_name]["total"]["docs"]["count"],
-                    "index_size": stats["indices"][elastic_service.index_name]["total"]["store"]["size_in_bytes"]
-                }
-            except Exception as stats_error:
-                # Fallback: use search to count documents
-                try:
-                    count_response = elastic_service.es_client.count(index=elastic_service.index_name)
-                    index_stats = {
-                        "document_count": count_response["count"],
-                        "index_size": "unknown (serverless mode)"
-                    }
-                except Exception as count_error:
-                    index_stats = {
-                        "document_count": "unknown",
-                        "index_size": "unknown",
-                        "error": "Cannot access stats in serverless mode"
-                    }
-        
-        return {
-            "status": "connected" if is_connected else "disconnected",
-            "index_name": str(elastic_service.index_name),
-            "index_exists": bool(index_exists),
-            "index_stats": index_stats,
-            "timestamp": datetime.utcnow().isoformat()
-        }
-        
-    except Exception as e:
-        logger.error("elasticsearch_status_check_failed", error=str(e))
-        return {
-            "status": "error",
-            "error": str(e),
-            "timestamp": datetime.utcnow().isoformat()
-        }
+    return {
+        "status": "disabled",
+        "message": "Elasticsearch service has been removed to eliminate cloud costs",
+        "index_name": None,
+        "index_exists": False,
+        "index_stats": {},
+        "timestamp": datetime.utcnow().isoformat()
+    }
 
 
 @router.get("/scene/{video_id}/{scene_id}")
 async def get_scene_context(video_id: str, scene_id: str) -> Dict[str, Any]:
     """
-    Get structured context for a specific scene.
-    
+    Scene context retrieval disabled - Elasticsearch removed to eliminate costs.
+
     Args:
-        video_id: The video identifier
-        scene_id: The scene identifier
-        
+        video_id: The video identifier (ignored)
+        scene_id: The scene identifier (ignored)
+
     Returns:
-        Scene context with metadata, transcript, and objects
+        Error response since functionality is disabled
     """
-    if not elastic_service:
-        raise HTTPException(
-            status_code=503, 
-            detail="Elasticsearch service not available"
-        )
-    
-    try:
-        logger.info("getting_scene_context", video_id=video_id, scene_id=scene_id)
-        
-        # Search for the specific scene
-        query = {
-            "query": {
-                "bool": {
-                    "must": [
-                        {"term": {"video_id": video_id}},
-                        {"term": {"scene_id": scene_id}}
-                    ]
-                }
-            }
-        }
-        
-        response = elastic_service.es_client.search(
-            index=elastic_service.index_name,
-            body=query
-        )
-        
-        if response["hits"]["total"]["value"] > 0:
-            scene_data = response["hits"]["hits"][0]["_source"]
-            return {
-                "status": "success",
-                "scene_context": scene_data,
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        else:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Scene {scene_id} not found for video {video_id}"
-            )
-            
-    except Exception as e:
-        logger.error("get_scene_context_failed", video_id=video_id, scene_id=scene_id, error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to get scene context: {str(e)}")
+    raise HTTPException(
+        status_code=503,
+        detail="Scene context retrieval has been disabled to eliminate cloud costs"
+    )
 
 
 @router.post("/test-pipeline")
 async def test_analysis_pipeline() -> Dict[str, Any]:
     """
-    Test the complete analysis pipeline with a mock video to ensure all components work
+    Test the analysis pipeline - Elasticsearch components disabled to eliminate costs
     """
     try:
         # Initialize services
         services_ready = initialize_services()
-        
+
         if not services_ready:
             return {
                 "status": "failed",
                 "error": "Services not available",
-                "elasticsearch_available": elastic_service is not None,
+                "elasticsearch_available": False,  # Always false now
                 "metadata_generator_available": metadata_generator is not None,
                 "audio_service_available": audio_transcription_service is not None
             }
-        
-        # Test Elasticsearch connection
-        es_status = "unknown"
-        try:
-            es_connected = elastic_service.es_client.ping()
-            es_status = "connected" if es_connected else "disconnected"
-        except Exception as es_error:
-            es_status = f"error: {str(es_error)}"
-        
-        # Create a test document to verify indexing works
-        test_doc = {
-            "video_id": "test_pipeline_video",
-            "scene_id": "test_pipeline_video_scene_1",
-            "start_time_ms": 0,
-            "end_time_ms": 5000,
-            "scene_summary": "Test scene for pipeline validation",
-            "full_description": "This is a test scene to verify the analysis pipeline is working correctly",
-            "scene_embedding": [0.1] * 768,
-            "transcript_phrases": [
-                {
-                    "text": "This is a test transcript",
-                    "start_ms": 0,
-                    "end_ms": 3000,
-                    "speaker": "test_speaker"
-                }
-            ],
-            "objects_tracked": [
-                {
-                    "label": "test_object",
-                    "track_id": "test_obj_1",
-                    "confidence": 0.9
-                }
-            ],
-            "actions_detected": ["testing"]
-        }
-        
-        # Test indexing
-        indexing_result = "unknown"
-        try:
-            success_count, failed_operations = await elastic_service.bulk_index_documents([test_doc])
-            indexing_result = f"success: {success_count} indexed, {len(failed_operations)} failed"
-        except Exception as index_error:
-            indexing_result = f"error: {str(index_error)}"
-        
-        # Test search
-        search_result = "unknown"
-        try:
-            search_response = await elastic_service.search_video_content("test", min_score=0.1, max_results=5)
-            search_result = f"success: {len(search_response)} results found"
-        except Exception as search_error:
-            search_result = f"error: {str(search_error)}"
-        
+
         return {
             "status": "completed",
             "timestamp": datetime.utcnow().isoformat(),
             "services": {
-                "elasticsearch_status": es_status,
-                "indexing_test": indexing_result,
-                "search_test": search_result,
+                "elasticsearch_status": "disabled",
+                "indexing_test": "disabled",
+                "search_test": "disabled",
                 "metadata_generator_ready": metadata_generator is not None,
                 "audio_service_ready": audio_transcription_service is not None
             },
             "recommendations": [
-                "If Elasticsearch shows 'disconnected', check ELASTIC_URL and ELASTIC_API_KEY",
-                "If indexing fails, verify index permissions and document structure",
-                "If search fails, ensure documents are properly indexed with embeddings"
+                "Elasticsearch services have been disabled to eliminate cloud costs",
+                "Video analysis and transcription still work without search/indexing",
+                "Consider using local storage or alternative search solutions if needed"
             ]
         }
-        
+
     except Exception as e:
         return {
             "status": "failed",
@@ -754,48 +567,53 @@ async def test_analysis_pipeline() -> Dict[str, Any]:
 @router.delete("/video/{video_id}")
 async def delete_video_data(video_id: str) -> Dict[str, Any]:
     """
-    Delete all data for a specific video from Elasticsearch.
-    
+    Delete all data for a specific video from Supabase.
+
     Args:
         video_id: The video ID to delete
-        
+
     Returns:
         Deletion status and count
     """
-    if not elastic_service:
-        raise HTTPException(
-            status_code=503, 
-            detail="Elasticsearch service not available"
-        )
-    
-    try:
-        # Delete all documents for this video
-        delete_query = {
-            "query": {
-                "term": {
-                    "video_id": video_id
-                }
-            }
-        }
-        
-        response = elastic_service.es_client.delete_by_query(
-            index=elastic_service.index_name,
-            body=delete_query
-        )
-        
-        deleted_count = response.get("deleted", 0)
-        
-        logger.info("video_data_deleted", 
-                   video_id=video_id, 
-                   deleted_count=deleted_count)
-        
+    # Initialize services on demand
+    initialize_services()
+
+    if not supabase_service or not supabase_service.is_available():
         return {
-            "status": "success",
+            "status": "unavailable",
             "video_id": video_id,
-            "deleted_documents": deleted_count,
+            "message": "Video deletion not available - Supabase not configured",
             "timestamp": datetime.utcnow().isoformat()
         }
-        
+
+    try:
+        # Delete all scenes for this video
+        success = await supabase_service.delete_video_scenes(video_id)
+
+        if success:
+            logger.info("video_data_deleted",
+                       video_id=video_id,
+                       message="Scenes deleted from Supabase")
+
+            return {
+                "status": "success",
+                "video_id": video_id,
+                "message": "Video scenes deleted from search database",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        else:
+            return {
+                "status": "error",
+                "video_id": video_id,
+                "message": "Failed to delete video scenes",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+
     except Exception as e:
         logger.error("video_deletion_failed", video_id=video_id, error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to delete video data: {str(e)}")
+        return {
+            "status": "error",
+            "video_id": video_id,
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }

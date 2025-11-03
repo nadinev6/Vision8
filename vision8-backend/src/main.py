@@ -33,23 +33,22 @@ class SimpleSettings:
     API_BASE_URL = os.getenv("API_BASE_URL", f"http://{os.getenv('API_HOST', '0.0.0.0')}:{os.getenv('API_PORT', 8000)}")
     CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001,http://localhost:5173,https://vision8-e7683.web.app,https://vision8-e7683.firebaseapp.com").split(",")
     # Placeholder configs for services
-    ELASTIC_URL = os.getenv("ELASTIC_URL", "http://localhost:9200")
-    ELASTIC_API_KEY = os.getenv("ELASTIC_API_KEY")
-    ELASTIC_INDEX = os.getenv("ELASTIC_INDEX", "scene_segments")
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
     GEMINI_MODEL_NAME = os.getenv("GEMINI_MODEL_NAME", "gemini-2.5-flash-preview-05-20")
-    
+
+    # Elasticsearch removed to eliminate costs
+    ELASTIC_URL = None
+    ELASTIC_API_KEY = None
+    ELASTIC_INDEX = None
+
     # Validate critical environment variables
     @classmethod
     def validate_config(cls):
         missing_vars = []
         if not cls.GEMINI_API_KEY:
             missing_vars.append("GEMINI_API_KEY")
-        if not cls.ELASTIC_URL:
-            missing_vars.append("ELASTIC_URL") 
-        if not cls.ELASTIC_API_KEY:
-            missing_vars.append("ELASTIC_API_KEY")
-        
+        # Elasticsearch no longer required
+
         if missing_vars:
             logger.warning("Missing environment variables", missing=missing_vars)
             return False
@@ -111,14 +110,9 @@ class ServiceRegistry:
         try:
             logger.info("Initializing application services...")
 
-            # Initialize Elasticsearch service
-            try:
-                from services.elastic_service import ElasticService
-                self.elasticsearch = ElasticService()
-                logger.info("✅ Elasticsearch service initialized")
-            except Exception as e:
-                logger.error("❌ Failed to initialize Elasticsearch service", error=str(e))
-                self.elasticsearch = None
+            # Elasticsearch service removed to eliminate costs
+            logger.info("ℹ️ Elasticsearch service disabled to eliminate cloud costs")
+            self.elasticsearch = None
 
             # Initialize Metadata Generator
             try:
@@ -157,13 +151,8 @@ class ServiceRegistry:
                 except Exception as e:
                     logger.error("❌ Cache service shutdown failed", error=str(e))
             
-            # Shutdown Elasticsearch service
-            if self.elasticsearch:
-                try:
-                    self.elasticsearch.es_client.close()
-                    logger.info("✅ Elasticsearch service shut down")
-                except Exception as e:
-                    logger.error("❌ Elasticsearch service shutdown failed", error=str(e))
+            # Elasticsearch service removed - no shutdown needed
+            logger.info("ℹ️ Elasticsearch service already disabled")
             
             logger.info("🎉 All services shut down successfully")
 
@@ -402,33 +391,28 @@ async def health_check() -> Dict[str, Any]:
     Health check endpoint to verify application status.
     """
     try:
-        # Check Elasticsearch connection
+        # Elasticsearch removed - always report as disabled
         es_healthy = False
-        if service_registry.elasticsearch:
-            try:
-                es_healthy = service_registry.elasticsearch.es_client.ping()
-            except Exception as e:
-                logger.warning("Elasticsearch ping failed", error=str(e))
-        
-        # Count active services
+
+        # Count active services (excluding Elasticsearch)
         active_services = sum([
-            bool(service_registry.elasticsearch),
             bool(service_registry.metadata_generator),
             bool(service_registry.cache_service)
         ])
-        
-        overall_status = "healthy" if active_services >= 2 else "degraded" if active_services >= 1 else "unhealthy"
-        
+
+        overall_status = "healthy" if active_services >= 1 else "degraded" if active_services >= 0 else "unhealthy"
+
         return {
             "status": overall_status,
             "version": "1.0.0",
             "services": {
-                "elasticsearch": "connected" if es_healthy else "disconnected",
+                "elasticsearch": "disabled",
                 "metadata_generator": "active" if service_registry.metadata_generator else "inactive",
                 "cache_service": "active" if service_registry.cache_service else "inactive"
             },
             "active_services": active_services,
-            "total_services": 3
+            "total_services": 2,  # Reduced from 3 since Elasticsearch removed
+            "note": "Elasticsearch disabled to eliminate cloud costs"
         }
     except Exception as e:
         logger.error(f"Health check failed: {str(e)}")
@@ -486,15 +470,19 @@ async def api_test() -> Dict[str, Any]:
     Simple API test endpoint to verify the API is working.
     """
     return {
-        "message": "Vision8 Backend API is operational",
+        "message": "Vision8 Backend API is operational (Elasticsearch disabled)",
         "version": "1.0.0",
         "timestamp": datetime.utcnow().isoformat(),
         "environment": "production" if not settings.API_DEBUG_MODE else "development",
         "services_available": {
-            "elasticsearch": service_registry.elasticsearch is not None,
+            "elasticsearch": False,  # Always false now
             "metadata_generator": service_registry.metadata_generator is not None,
             "cache_service": service_registry.cache_service is not None
-        }
+        },
+        "notes": [
+            "Elasticsearch disabled to eliminate cloud costs",
+            "Video analysis and transcription remain functional"
+        ]
     }
 
 # Explicit OPTIONS handler for all API routes
@@ -562,32 +550,29 @@ async def api_status() -> Dict[str, Any]:
     API status endpoint with comprehensive information.
     """
     try:
-        # Check service health
-        es_healthy = False
-        if service_registry.elasticsearch:
-            try:
-                es_healthy = service_registry.elasticsearch.es_client.ping()
-            except:
-                pass
-        
         return {
             "name": "Vision8 Backend API",
             "version": "1.0.0",
             "status": "operational",
-            "description": "Intelligent video processing and AI-powered scene generation",
+            "description": "Intelligent video processing and AI-powered scene generation (Elasticsearch disabled)",
             "documentation": f"{settings.API_BASE_URL}/api/docs",
             "redoc": f"{settings.API_BASE_URL}/api/redoc",
             "endpoints": {
                 "health": f"{settings.API_BASE_URL}/health",
                 "cors_test": f"{settings.API_BASE_URL}/cors-test",
                 "video_analysis": f"{settings.API_BASE_URL}/api/v1/analysis/upload",
-                "search": f"{settings.API_BASE_URL}/api/v1/analysis/search"
+                "search": f"{settings.API_BASE_URL}/api/v1/analysis/search (disabled)"
             },
             "services": {
-                "elasticsearch": "connected" if es_healthy else "disconnected",
+                "elasticsearch": "disabled",
                 "metadata_generator": "active" if service_registry.metadata_generator else "inactive",
                 "cache_service": "active" if service_registry.cache_service else "inactive"
             },
+            "notes": [
+                "Elasticsearch search and indexing disabled to eliminate cloud costs",
+                "Video analysis and transcription still functional",
+                "Consider local alternatives for search if needed"
+            ],
             "timestamp": datetime.utcnow().isoformat()
         }
     except Exception as e:

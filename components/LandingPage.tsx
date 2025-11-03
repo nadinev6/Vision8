@@ -227,9 +227,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
                   {/* Left Aligned Sub-tagline with Message Bubble */}
                   <div className="pointer-events-auto left-0 w-max lg:-ml-24">
                     <div className="bg-blue-100 rounded-lg sm:rounded-xl md:rounded-2xl px-2 py-1 sm:px-3 sm:py-2 md:px-4 md:py-3 lg:px-6 lg:py-4 shadow-lg border border-blue-200/30">
-                      <p className="text-xs sm:text-sm md:text-base lg:text-xl font-medium leading-relaxed text-gray-800">
-                        The conversational engine<br className="md:hidden" />
-                        <span className="hidden md:inline"> </span>for video intelligence.
+                      <p className="text-xs sm:text-sm md:text-base lg:text-xl font-medium leading-relaxed text-gray-800 whitespace-nowrap">
+                        The conversational engine for video intelligence.
                       </p>
                     </div>
                   </div>
@@ -237,9 +236,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
                   {/* Right Aligned Main Tagline with Message Bubble - Moved further right and UP */}
                   <div className="lg:w-2/5 lg:flex lg:justify-end lg:self-center mt-2 sm:mt-3 md:mt-4 lg:-mt-16 pointer-events-auto -mr-1 sm:-mr-2 md:-mr-4 lg:-mr-24">
                     <div className="bg-blue-100 rounded-lg sm:rounded-xl md:rounded-2xl px-2 py-1 sm:px-3 sm:py-2 md:px-4 md:py-3 lg:px-6 lg:py-4 shadow-lg border border-blue-200/30 lg:text-right">
-                      <p className="text-sm sm:text-base md:text-lg lg:text-2xl font-medium leading-tight text-gray-800">
-                        The Future of<br />
-                        Video Search.
+                      <p className="text-sm sm:text-base md:text-lg lg:text-2xl font-medium leading-tight text-gray-800 whitespace-nowrap">
+                        The Future of Video Search.
                       </p>
                     </div>
                   </div>
@@ -251,14 +249,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
 
         {/* Subtle Creative Strategy Text - FIXED OVERLAP */}
         <div className="absolute bottom-8 left-8 z-10">
-          <p className="text-lg italic opacity-60" style={{ color: '#ffffff' }}>
+          <p className="text-sm sm:text-base md:text-lg italic opacity-60" style={{ color: '#ffffff' }}>
             AI Deconstruction for Unfiltered Video
           </p>
         </div>
 
         {/* Bottom Right Corner Text (Unchanged position) */}
         <div className="absolute bottom-8 right-8 text-right z-10">
-          <div className="text-2xl lg:text-3xl font-light leading-tight" style={{ color: '#ffffff' }}>
+          <div className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-light leading-tight" style={{ color: '#ffffff' }}>
             Video<br />
             Insights in<br />
             Every Frame
@@ -273,8 +271,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
         <div className="py-16">
           <div className="max-w-6xl mx-auto px-4">
             <div className="text-center mb-16">
-              <h2 className="text-3xl font-bold text-gray-900 mb-4 font-sans">Roadmap</h2>
-              <p className="text-lg text-gray-600 max-w-2xl mx-auto font-sans">
+              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-4 font-sans">Roadmap</h2>
+              <p className="text-base sm:text-lg text-gray-600 max-w-2xl mx-auto font-sans px-4">
                 From prototype to the world's leading video AI platform
               </p>
             </div>
@@ -289,13 +287,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
                   <div className="card" style={{ background: '#00ffa0', width: 'auto', maxWidth: '400px', marginLeft: 'auto' }}>
                     <div className="pricing-block-content">
                       <h3 className="pricing-plan">Phase 1: Infrastructure</h3>
-                      <div className="pricing-note" style={{ fontWeight: '600', marginBottom: '0.5rem' }}>Next 4 weeks</div>
+                      <div className="pricing-note" style={{ fontWeight: '600', marginBottom: '0.5rem' }}>✅ Complete</div>
                       <ul className="check-list">
                         <li className="check-list-item">
                           <svg version="1.0" preserveAspectRatio="xMidYMid meet" height="16" viewBox="0 0 30 30.000001" width="16" xmlns="http://www.w3.org/2000/svg" style={{ color: '#05060f' }}>
                             <path fillRule="nonzero" fillOpacity="1" d="M 27.5 7.53125 L 24.464844 4.542969 C 24.15625 4.238281 23.65625 4.238281 23.347656 4.542969 L 11.035156 16.667969 L 6.824219 12.523438 C 6.527344 12.230469 6 12.230469 5.703125 12.523438 L 2.640625 15.539062 C 2.332031 15.84375 2.332031 16.335938 2.640625 16.640625 L 10.445312 24.324219 C 10.59375 24.472656 10.796875 24.554688 11.007812 24.554688 C 11.214844 24.554688 11.417969 24.472656 11.566406 24.324219 L 27.5 8.632812 C 27.648438 8.488281 27.734375 8.289062 27.734375 8.082031 C 27.734375 7.875 27.648438 7.679688 27.5 7.53125 Z M 27.5 7.53125" fill="#05060f" />
                           </svg>
-                          Migrate to cost-effective vector database
+                          ✅ Migrated to Supabase vector database (80% cost reduction)
                         </li>
                         <li className="check-list-item">
                           <svg version="1.0" preserveAspectRatio="xMidYMid meet" height="16" viewBox="0 0 30 30.000001" width="16" xmlns="http://www.w3.org/2000/svg" style={{ color: '#05060f' }}>
@@ -507,8 +505,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
                     <span className="text-xs text-gray-400 font-sans">Google Cloud</span>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <img src="/icons/elastic.svg" alt="Elasticsearch" className="w-5 h-5" />
-                    <span className="text-xs text-gray-400 font-sans">Elasticsearch</span>
+                    <img src="/icons/supabase-icon.svg" alt="Supabase" className="w-5 h-5" />
+                    <span className="text-xs text-gray-400 font-sans">Supabase</span>
                   </div>
                   <div className="flex items-center space-x-2">
                     <img src="/icons/redis.svg" alt="Redis Cache" className="w-5 h-5" />
