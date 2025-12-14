@@ -105,6 +105,12 @@ Thumbs.db
 
 # IDEs
 .vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/mcp.json
+
 .idea/
 *.swp
 *_flymake.*

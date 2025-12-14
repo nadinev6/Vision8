@@ -8,6 +8,7 @@ import AIThinkingBlock from './AIThinkingBlock';
 import { Button } from './ui/button';
 import { Scene, TranscriptItem, TrackedObject } from './AnalysisPanel';
 import { Popover, PopoverTrigger, PopoverContent } from './ui/popover';
+import SceneReplacementActions from './SceneReplacementActions';
 
 
 // --- TYPE DEFINITIONS ---
@@ -252,12 +253,35 @@ const AIMessage: React.FC<{
 
 
                 result.push(
-                    <TimestampButton
-                        key={`timestamp-${i}`}
-                        timeInSeconds={timeInSeconds}
-                        displayText={`[${timeStr}]`}
-                        typeHint={typeHint}
-                    />
+                    <div key={`timestamp-group-${i}`} className="inline-block">
+                        <TimestampButton
+                            timeInSeconds={timeInSeconds}
+                            displayText={`[${timeStr}]`}
+                            typeHint={typeHint}
+                        />
+                        {typeHint === 'scene' && (
+                            <SceneReplacementActions
+                                timestamp={timeStr}
+                                onOptionSelected={(option) => {
+                                    console.log(`Option selected for ${timeStr}: ${option}`);
+                                    // TODO: Wire up to backend API using fetch
+                                    /*
+                                    fetch('/api/v1/mux/scenes/replace', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            asset_id: 'CURRENT_ASSET_ID', // Needs context
+                                            start_time: timeInSeconds,
+                                            end_time: timeInSeconds + 5, // Default duration?
+                                            option: option,
+                                            prompt: "Generated scene" // Needs prompt input UI
+                                        })
+                                    });
+                                    */
+                                }}
+                            />
+                        )}
+                    </div>
                 );
             }
         }

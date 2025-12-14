@@ -525,6 +525,13 @@ try:
 except Exception as e:
     logger.error("❌ Failed to load video analysis routes", error=str(e))
 
+try:
+    from api.mux_router import router as mux_router
+    app.include_router(mux_router)
+    logger.info("✅ Mux integration routes loaded")
+except Exception as e:
+    logger.error("❌ Failed to load Mux integration routes", error=str(e))
+
 
 # CORS preflight handler
 @app.options("/{path:path}")

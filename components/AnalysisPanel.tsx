@@ -60,17 +60,17 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ rightPanelWidth, scenes, 
         if (error) {
             return (
                 <div className="flex flex-col items-center justify-center h-full text-center text-red-600 p-4">
-                     <XIcon className="w-6 h-6 mb-3" />
+                    <XIcon className="w-6 h-6 mb-3" />
                     <p className="font-semibold">Analysis Failed</p>
                     <p className="text-sm mt-1">{error}</p>
                 </div>
             )
         }
-        
+
         const hasData = scenes.length > 0 || transcripts.length > 0 || objects.length > 0;
         if (!hasData) {
             return (
-                 <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground p-4">
+                <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground p-4">
                     <VideoIcon className="w-8 h-8 mb-3" />
                     <p className="font-semibold">No analysis data</p>
                     <p className="text-sm mt-1">Upload a video and click 'Analyze' to begin.</p>
@@ -98,8 +98,8 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ rightPanelWidth, scenes, 
                     <div className="p-2 space-y-2">
                         {transcripts.map((item, index) => {
                             const isActive = activeTimestamp !== null && activeTimestamp >= item.startTime && activeTimestamp <= item.endTime;
-                             return (
-                                 <button key={index} onClick={() => onTimestampClick(item.startTime, 'transcription')} className={cn("w-full text-left p-2 rounded-md hover:bg-secondary transition-colors", isActive && "bg-primary/5 ring-1 ring-primary/30")}>
+                            return (
+                                <button key={index} onClick={() => onTimestampClick(item.startTime, 'transcription')} className={cn("w-full text-left p-2 rounded-md hover:bg-secondary transition-colors", isActive && "bg-primary/5 ring-1 ring-primary/30")}>
                                     <p className="text-xs text-primary font-mono">{formatTime(item.startTime)} - {formatTime(item.endTime)}</p>
                                     <p className="text-sm text-foreground leading-relaxed">{item.text}</p>
                                 </button>
@@ -119,6 +119,26 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ rightPanelWidth, scenes, 
                                 </button>
                             );
                         })}
+                    </div>
+                );
+            case 'analytics':
+                return (
+                    <div className="p-4 text-center">
+                        <div className="bg-muted/50 rounded-lg p-6 space-y-4">
+                            <div className="text-4xl font-bold text-primary">0</div>
+                            <div className="text-sm text-muted-foreground font-medium uppercase tracking-wide">Total Views</div>
+                        </div>
+                        <div className="mt-4 grid grid-cols-2 gap-4">
+                            <div className="bg-muted/50 rounded-lg p-4">
+                                <div className="text-2xl font-bold">0%</div>
+                                <div className="text-xs text-muted-foreground mt-1">Completion Rate</div>
+                            </div>
+                            <div className="bg-muted/50 rounded-lg p-4">
+                                <div className="text-2xl font-bold">0s</div>
+                                <div className="text-xs text-muted-foreground mt-1">Avg Watch Time</div>
+                            </div>
+                        </div>
+                        <p className="mt-8 text-xs text-muted-foreground">Mux Analytics Data (Demo)</p>
                     </div>
                 );
             default:
@@ -150,6 +170,7 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ rightPanelWidth, scenes, 
                     <TabButton className="flex-1" active={activeTab === 'scene'} onClick={() => onTabChange('scene')}>Scenes</TabButton>
                     <TabButton className="flex-1" active={activeTab === 'transcription'} onClick={() => onTabChange('transcription')}>Transcript</TabButton>
                     <TabButton className="flex-1" active={activeTab === 'object'} onClick={() => onTabChange('object')}>Objects</TabButton>
+                    <TabButton className="flex-1" active={activeTab === 'analytics'} onClick={() => onTabChange('analytics')}>Analytics</TabButton>
                 </div>
             </div>
             <div className="flex-grow relative min-h-0">
@@ -159,7 +180,7 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ rightPanelWidth, scenes, 
                     </div>
                 </div>
             </div>
-        </aside>
+        </aside >
     );
 };
 

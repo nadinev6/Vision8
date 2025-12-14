@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from "react";
+import MuxVideoPlayer from "./MuxVideoPlayer";
 import { Button } from "./ui/button";
 import { Popover, PopoverTrigger, PopoverContent } from "./ui/popover";
 import { Slider } from "./ui/slider";
@@ -309,15 +310,22 @@ const VideoPlayerPro = React.forwardRef<HTMLVideoElement, VideoPlayerProProps>((
         onMouseLeave={() => setShowControls(false)}
       >
         {src ? (
-          <video
+          <MuxVideoPlayer
             ref={videoCallbackRef}
-            key={src}
-            className="w-full h-full object-contain"
-            src={src}
+            key={src} // Remount on src change
+            src={src} // Pass src (could be blob or mux URL)
+            // If we have a playback ID and not a raw file, we should pass it. 
+            // For now, assuming src might be a direct file URL for local dev or a mux playback URL.
+            // If the app logic expects src to be a URL, MuxVideoPlayer handles it.
+            className="w-full h-full"
             onTimeUpdate={handleTimeUpdate}
             onEnded={handleEnded}
             onLoadedMetadata={handleMetadataLoaded}
             onClick={isSlave ? undefined : togglePlay}
+            title={title}
+            playbackId={null}
+            muted={isMuted || !!forceMute}
+          // MuxPlayer manages its own state, but we are controlling it via ref
           />
         ) : (
           <p className="text-muted-foreground font-medium">{title}</p>
