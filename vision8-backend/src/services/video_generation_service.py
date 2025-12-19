@@ -594,6 +594,90 @@ class VideoGenerationService:
             logger.error("Failed to validate video compatibility", error=str(e))
             return False
 
+    async def concatenate_videos(self, video_urls: List[str], output_filename: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Concatenate multiple video segments into a single file.
+        
+        Args:
+            video_urls: List of URLs or paths to video segments.
+            output_filename: Optional name for the output file.
+        """
+        import ffmpeg
+        import tempfile
+        from urllib.parse import urlparse
+        
+        logger.info("Starting video concatenation", count=len(video_urls))
+        
+        temp_dir = Path(tempfile.mkdtemp())
+        try:
+            local_paths = []
+            for i, url in enumerate(video_urls):
+                local_path = temp_dir / f"segment_{i}.mp4"
+                
+                # If it's a URL, download it
+                if url.startswith("http"):
+                    logger.info("Downloading segment", index=i, url=url)
+                    async with aiohttp.AsyncClient() as client:
+                        response = await client.get(url)
+                        response.raise_for_status()
+                        with open(local_path, "wb") as f:
+                            f.write(await response.read())
+                else:
+                    # Assume it's a local path
+                    if os.path.exists(url):
+                        shutil.copy2(url, local_path)
+                    else:
+                        raise FileNotFoundError(f"Segment file not found: {url}")
+                
+                local_paths.append(local_path)
+            
+            # Create concat file
+            concat_list_path = temp_dir / "concat_list.txt"
+            with open(concat_list_path, "w") as f:
+                for path in local_paths:
+                    # Using absolute paths for ffmpeg
+                    f.write(f"file '{path.absolute()}'\n")
+            
+            # Output setup
+            if not output_filename:
+                output_filename = f"production_{int(asyncio.get_event_loop().time())}.mp4"
+            
+            # Use project's central storage path if configured, else temp
+            storage_dir = os.getenv('STORAGE_DIR', './storage')
+            os.makedirs(storage_dir, exist_ok=True)
+            output_path = os.path.join(storage_dir, output_filename)
+            
+            # FFMPEG Concatenation
+            (
+                ffmpeg
+                .input(str(concat_list_path), format='concat', safe=0)
+                .output(output_path, c='copy') # Try copy first for speed
+                .overwrite_output()
+                .run(quiet=True)
+            )
+            
+            logger.info("Concatenation complete", output=output_path)
+            
+            # If we were using Mux, we'd upload here. For now, return the internal preview URL or local path.
+            # Assuming a simple web server is serving the storage_dir at /storage
+            base_url = os.getenv('API_BASE_URL', 'http://localhost:8000')
+            result_url = f"{base_url}/storage/{output_filename}"
+            
+            return {
+                "status": "success",
+                "result_url": result_url,
+                "segments_count": len(video_urls),
+                "output_filename": output_filename
+            }
+            
+        except Exception as e:
+            logger.error("Concatenation failed", error=str(e), exc_info=True)
+            raise
+        finally:
+            # We DON'T delete the temp folder immediately if we're using those paths in ffmpeg asynchronously?
+            # But we ran it .run() which is blocking in the loop. So cleanup is safe.
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
 
 # Global service instance
 video_generation_service = VideoGenerationService()

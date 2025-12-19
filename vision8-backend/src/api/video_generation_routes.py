@@ -19,6 +19,11 @@ logger = structlog.get_logger()
 
 router = APIRouter(prefix="/generation", tags=["Video Generation"])
 
+class ConcatenateRequest(BaseModel):
+    """Request model for video concatenation."""
+    video_urls: List[str] = Field(..., description="List of video URLs to concatenate")
+    output_filename: Optional[str] = Field(None, description="Optional custom output filename")
+
 
 # Request/Response Models
 class GenerationRequest(BaseModel):
@@ -346,6 +351,23 @@ async def stitch_video_with_scene(request: StitchRequest) -> Dict[str, Any]:
             status_code=500,
             detail=f"Video stitching failed: {str(e)}"
         )
+
+
+@router.post("/concatenate")
+async def concatenate_videos(request: ConcatenateRequest) -> Dict[str, Any]:
+    """
+    Concatenate multiple video segments into a single file.
+    """
+    try:
+        logger.info("Received concatenation request", count=len(request.video_urls))
+        result = await video_generation_service.concatenate_videos(
+            request.video_urls, 
+            request.output_filename
+        )
+        return result
+    except Exception as e:
+        logger.error("Concatenation request failed", error=str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/scene-context/{video_id}/{scene_id}")

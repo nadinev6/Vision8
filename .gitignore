@@ -13,7 +13,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# lib/
 lib64/
 parts/
 sdist/
@@ -182,3 +182,10 @@ PRODUCTION_*.md
 CORS_*.md
 BUILD_*.md
 REDIS_*.md
+SystemInstructions.txt
+IMPLEMENTATION_ROADMAP.md
+MUX Implementation Plan Summary.md
+PRO-REALISM*.md
+*.md
+!README.md
+!vision8-backend/.env.example

@@ -171,7 +171,7 @@ async function getVideoFrames(videoFile: File, maxFrames: number): Promise<{ dat
   });
 }
 
-export async function analyzeVideo(videoFile: File, customVideoId?: string): Promise<{ scenes: Scene[], transcripts: TranscriptItem[], objects: TrackedObject[] }> {
+export async function analyzeVideo(videoFile: File, customVideoId?: string): Promise<{ scenes: Scene[], transcripts: TranscriptItem[], objects: TrackedObject[], videoId?: string, muxPlaybackId?: string }> {
   console.log("🎬 Starting video analysis...");
   console.log("Video file:", videoFile.name, "Size:", videoFile.size);
 
@@ -216,7 +216,7 @@ export async function analyzeVideo(videoFile: File, customVideoId?: string): Pro
 /**
  * Analyze video using the backend API
  */
-async function analyzeVideoWithBackend(videoFile: File, customVideoId?: string): Promise<{ scenes: Scene[], transcripts: TranscriptItem[], objects: TrackedObject[] } | null> {
+async function analyzeVideoWithBackend(videoFile: File, customVideoId?: string): Promise<{ scenes: Scene[], transcripts: TranscriptItem[], objects: TrackedObject[], videoId?: string, muxPlaybackId?: string } | null> {
   try {
     const formData = new FormData();
     formData.append('file', videoFile);
@@ -228,7 +228,7 @@ async function analyzeVideoWithBackend(videoFile: File, customVideoId?: string):
     const backendUrl = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
     const uploadUrl = `${backendUrl}/analysis/upload`;
     console.log("🔗 Using backend URL:", uploadUrl);
-    
+
     const response = await fetch(uploadUrl, {
       method: 'POST',
       body: formData
@@ -254,10 +254,24 @@ async function analyzeVideoWithBackend(videoFile: File, customVideoId?: string):
   }
 }
 
+
+async function getVideoDetails(videoId: string): Promise<{ mux_playback_id?: string } | null> {
+  try {
+    const backendUrl = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+    const response = await fetch(`${backendUrl}/analysis/video/${videoId}`);
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.video;
+  } catch (e) {
+    console.error("Failed to get video details", e);
+    return null;
+  }
+}
+
 /**
  * Convert backend analysis result to frontend format by searching Elasticsearch
  */
-async function convertBackendResultToFrontend(videoId: string): Promise<{ scenes: Scene[], transcripts: TranscriptItem[], objects: TrackedObject[] }> {
+async function convertBackendResultToFrontend(videoId: string): Promise<{ scenes: Scene[], transcripts: TranscriptItem[], objects: TrackedObject[], videoId: string, muxPlaybackId?: string }> {
   try {
     // Search for all scenes from this video
     const searchResults = await hybridSearch(`video_id:${videoId}`, videoId, 50);
@@ -303,7 +317,19 @@ async function convertBackendResultToFrontend(videoId: string): Promise<{ scenes
       objects: objects.length
     });
 
-    return { scenes, transcripts, objects };
+    // Fetch video details to get muxPlaybackId
+    let muxPlaybackId: string | undefined;
+    try {
+      const videoDetails = await getVideoDetails(videoId);
+      if (videoDetails?.mux_playback_id) {
+        muxPlaybackId = videoDetails.mux_playback_id;
+        console.log("✅ Found Mux Playback ID:", muxPlaybackId);
+      }
+    } catch (e) {
+      console.warn("Could not fetch video details", e);
+    }
+
+    return { scenes, transcripts, objects, videoId, muxPlaybackId };
 
   } catch (error) {
     console.error("❌ Failed to convert backend result:", error);
@@ -504,17 +530,65 @@ const generationSettingsControlTool: any = {
 
 const showFeaturesTool: any = {
   name: 'showVision8Features',
-  description: "Shows comprehensive overview of Vision8's 5 core capabilities when users ask about features, capabilities, what the app can do, help, overview, or want to know about Vision8's functionality.",
+  description: "Shows comprehensive overview of Vision8's core capabilities, including Pro-Realism video features.",
   parameters: {
     type: Type.OBJECT,
     properties: {
       query_type: {
         type: Type.STRING,
-        description: 'Type of feature query (features, capabilities, help, overview, what can you do, etc.)'
+        description: 'Type of feature query'
       }
     },
     required: ['query_type']
   },
+};
+
+const generateComfySceneTool: any = {
+  name: 'generateComfyScene',
+  description: "Generates a video scene using a specific ComfyUI workflow (e.g., 'hero_scene', 'hallucination_scene').",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      workflow_name: { type: Type.STRING, description: "The name of the ComfyUI workflow to run." },
+      prompt: { type: Type.STRING, description: "The text prompt to guide the generation." },
+      assets: {
+        type: Type.OBJECT,
+        description: "Mapping of workflow node titles to asset paths/URLs (optional).",
+        additionalProperties: { type: Type.STRING }
+      }
+    },
+    required: ['workflow_name', 'prompt']
+  }
+};
+
+const generateProRealismVideoTool: any = {
+  name: 'generateProRealismVideo',
+  description: "High-end cinematic production tool. Sequences 'hero_scene' and 'lipsync' workflows to create professional talking-head content.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      prompt: { type: Type.STRING, description: "Detailed cinematic prompt for the hero scene." },
+      source_video: { type: Type.STRING, description: "Initial video asset path or URL for mouth/lip reference." }
+    },
+    required: ['prompt']
+  }
+};
+
+const stitchVideosTool: any = {
+  name: 'stitchVideos',
+  description: "Merge multiple video segments (VFX passes/renders) into a single final delivery video.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      video_urls: {
+        type: Type.ARRAY,
+        items: { type: Type.STRING },
+        description: "List of URLs or paths for the video segments to merge, in order."
+      },
+      output_filename: { type: Type.STRING, description: "Optional name for the final combined video file." }
+    },
+    required: ['video_urls']
+  }
 };
 
 /**
@@ -629,7 +703,17 @@ export async function generateChatResponseWithRAG(
     throw new Error("GoogleGenAI is not initialized. Please check your API key configuration.");
   }
   const model = 'gemini-2.5-flash';
-  const tools = [{ functionDeclarations: [searchVideoContentTool, videoSettingsControlTool, generationSettingsControlTool, showFeaturesTool] }];
+  const tools = [{
+    functionDeclarations: [
+      searchVideoContentTool,
+      videoSettingsControlTool,
+      generationSettingsControlTool,
+      showFeaturesTool,
+      generateComfySceneTool,
+      generateProRealismVideoTool,
+      stitchVideosTool
+    ]
+  }];
 
   let currentSettingsInfo = '';
   if (videoSettings) {
@@ -646,58 +730,75 @@ export async function generateChatResponseWithRAG(
 - Video Name: ${generationSettings.videoName}`;
   }
 
-  const systemInstruction = `You are Vision8, an AI-powered video analysis and generation assistant with comprehensive capabilities.
+  const systemInstruction = `You are the Vision Lead Technical & VFX Supervisor (or Technical Director) for Vision8, bridging the gap between creative vision and the ComfyUI rendering engine.
+
+## 🎭 ROLE & PERSONA: THE TECHNICAL DIRECTOR
+- **Identity**: You are the **Vision Lead Technical & VFX Supervisor**. Always introduce yourself this way in greetings.
+- **Expertise**: Deep knowledge of cinematic lighting, camera physics (focal length, sensor size, depth of field), and AI video artifacts.
+- **Tone**: Professional, precise, and encouraging. Use industry terminology consistently.
+
+## 🎬 CINEMA & VFX KNOWLEDGE BASE (TERMINOLOGY)
+You MUST use these terms in all interactions:
+- **Base Plates**: Refer to all user-uploaded videos or source footage as "base plates."
+- **Renders / VFX Passes**: Refer to all generated segments or AI transformations as "renders" or "VFX passes."
+- **Pre-viz**: Refer to the analysis phase as "pre-viz."
+- **Plates**: "Source plates," "Background plates."
+- **Compositing**: The process of merging AI elements with the base plate.
+- **Technical Terms**: "Global illumination," "Subsurface scattering," "Anamorphic bokeh," "Octane render," "Plate matching."
 
 ## 🎬 VISION8 CAPABILITIES:
+(Same as before, but ensure TD phrasing)
+- **Pre-viz (Video Analysis)**: AI-powered scene breakdowns and searchable metadata.
+- **Advanced Plate Search**: Natural language search for scenes, dialogue, and objects in your plates.
+- **Pro-Realism VFX (ComfyUI)**: 
+  - **Hero Renders**: Ultra-realistic grounded environment swaps.
+  - **Hallucination Passes**: Surreal, abstract transformations.
+  - **Lip-Sync Mandatory Rule**: ANY render featuring human talking MUST be followed by a \`lipsync\` pass.
 
-### 1. **Intelligent Video Analysis**
-- Upload videos and get AI-powered scene breakdowns with timestamps
-- Extract accurate transcriptions with speaker identification
-- Detect and track objects throughout the video
-- Generate searchable metadata for every scene
+## 🛠️ TOOL LOGIC & VFX WORKFLOW
+- **Thought Log Style**: When processing a request, reflect the workflow:
+  1. *Plate Analysis*: Assessing the resolution and lighting of the base plate.
+  2. *Pre-viz*: Identifying the best camera path and environment mapping.
+  3. *Primary Render*: Running the Hero or Hallucination pass.
+  4. *Final Pass (Lip-Sync)*: Ensuring dialogue alignment.
+- **Chained Workflows**: Inform the user: "Processing the primary Hero render for your base plate now; I'll composite the lip-sync pass immediately after."
 
-### 2. **Advanced Video Search**
-- Search video content using natural language queries
-- Find specific scenes, dialogue, objects, or actions instantly  
-- Get precise timestamp citations for every result
-- Semantic search powered by AI embeddings
+## 🎨 THE "PRO-REALISM" PROMPTING STANDARD
+You MUST inject "Realism Boosters" into every prompt, especially when targeting **Wan 2.2**:
+- **Lighting (Cinematic Priority)**: "High dynamic range cinematic lighting," "Rembrandt lighting setup," "volumetric lighting," "moody atmospheric shadows," "color graded with cinema contrast."
+- **Wan 2.2 Technicals**: For Wan 2.2 renders, prioritize "Global illumination," "subsurface scattering," and "8k octane render style."
+- **Lens**: "35mm anamorphic," "f/1.8 bokeh," "slight motion blur."
+- **Plate Matching**: Ensure the new render matches the lighting and perspective of the original plate.
 
-### 3. **AI Video Generation**
-- Replace any scene with AI-generated content using Veo-3 or Sora-2
-- Conversational prompts: "Make this scene more dramatic" or "Change the weather to rainy"
-- Multiple quality presets from draft to high-definition
-- Context-aware generation using original scene data
+## 🚦 STATE MANAGEMENT & EXPECTATIONS
+- **Interim Feedback**: "The GPU is currently processing the HDR environment maps. Render progress: 40%."
+- **Latency**: Manage expectations for high-fidelity renders.
 
-### 4. **Smart Video Editing**
-- Seamlessly stitch original footage with AI-generated scenes
-- Precise frame-level replacement at any timestamp
-- Maintain video quality and continuity
-- Export professional-quality results
+## 🛑 SAFETY & FALLBACK
+- **Budget vs. Premium**: Suggest "Budget" renders if credits are low.
 
-### 5. **Interactive Video Controls**
-- Adjust playback speed, trim ranges, and sync modes
-- Frame-by-frame navigation and analysis
-- Real-time settings control through conversation
-- Synchronized playback with search results
-
-${currentSettingsInfo}
-
-## SPECIAL RESPONSES:
-When users ask about "features", "capabilities", "what can you do", "help", "overview", or similar queries, use the showVision8Features tool to provide a comprehensive feature overview.
+## 📦 STANDARD PLAN PRODUCTION STRATEGIES
+For users on the Comfy Standard Plan, you MUST enforce these efficiency rules:
+- **5-8s Plate Rule**: Never attempt a single long render for complex shots. Generate in 5–8 second "plates" and stitch them later. This ensures high quality and avoids the "30-minute wall."
+- **Proxy-First Workflow (720p -> 4K)**: 
+  1. Generate a **720p Proxy** first to verify motion and composition.
+  2. Only trigger the heavy **4K Upscale** pass as a separate job AFTER the user approves the proxy motion.
+- **Asynchronous Planning**: Advise the user about this sequence: "I'll generate a 720p pre-viz plate first; once you approve the motion, we'll run the high-res 4K pass."
+- **Production Plan Logic (Long Videos > 8s)**:
+  1. When a render longer than 8 seconds is requested, you MUST generate a **'Production Plan'**.
+  2. Split the core prompt into multiple 5–8 second semantic segments (e.g., "Segment 1: The approach," "Segment 2: The close-up").
+  3. Inform the user of this plan before execution.
+  4. Generate each segment individually.
+  5. Use the \`stitchVideos\` tool to merge these segments into the final delivery.
 
 ## INSTRUCTIONS:
-- Answer questions about video content by searching through analyzed scenes, transcripts, and objects
-- Help users with video generation, editing, and playback controls
-- Provide timestamp citations as [mm:ss] for all video references
-- Use conversational language - you're a helpful video assistant, not a technical manual
-- When users ask about features or capabilities, showcase all 5 major capabilities above
-- Guide users through the complete workflow from analysis to generation to editing
-
-## RESPONSE STYLE:
-- Be enthusiastic about video creation and analysis capabilities
-- Speak naturally without mentioning technical implementation details
-- Focus on what you can help users accomplish with their videos
-- Use emojis and formatting to make responses engaging and clear`;
+- Always greet the user as "Vision Lead Technical & VFX Supervisor."
+- Use "base plates" and "VFX passes/renders" instead of "videos" or "segments."
+- For videos > 8s, always present a 'Production Plan' and use the \`stitchVideos\` tool.
+- Maintain the authoritative but supportive tone of a Technical Director.
+- Provide timestamp citations as [mm:ss].
+- Reflect the "VFX Workflow" in your reasoning/thought log.
+`;
 
   const userContent = { role: 'user', parts: [{ text: prompt }] };
 
@@ -748,7 +849,7 @@ When users ask about "features", "capabilities", "what can you do", "help", "ove
               const start = Math.max(0, Math.min(videoSettings.videoDuration, Number((value as any).start)));
               const end = Math.max(start + 0.1, Math.min(videoSettings.videoDuration, Number((value as any).end)));
               settingsCallbacks?.onTrimRangeChange?.(start, end);
-              result = `✅ ${description} - Set trim range to ${start}s-${end}s`;
+              result = `✅ ${description} - Set trim range to ${start}s - ${end}s`;
             } else {
               result = `❌ Invalid trim range values`;
             }
@@ -764,10 +865,10 @@ When users ask about "features", "capabilities", "what can you do", "help", "ove
             result = `✅ ${description} - ${frameMode ? 'Enabled' : 'Disabled'} frame mode`;
             break;
           default:
-            result = `❌ Unknown video setting: ${setting}`;
+            result = `❌ Unknown video setting: ${setting} `;
         }
       } catch (error) {
-        result = `❌ Error applying setting: ${error}`;
+        result = `❌ Error applying setting: ${error} `;
       }
 
       return {
@@ -815,6 +916,86 @@ When users ask about "features", "capabilities", "what can you do", "help", "ove
           response: { result },
         }
       };
+    } else if (fc.name === 'generateComfyScene') {
+      const { workflow_name, prompt, assets } = fc.args;
+      const backendBaseUrl = import.meta.env?.VITE_API_BASE_URL?.replace('/api/v1', '') || 'http://localhost:8000';
+
+      try {
+        const assetsArg = (assets || {}) as Record<string, any>;
+        const response = await fetch(`${backendBaseUrl}/api/comfy/run`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ workflow_name, inputs: { ...assetsArg, USER_PROMPT: prompt } })
+        });
+        const data = await response.json();
+        const result = `✅ ComfyUI Workflow "${workflow_name}" completed.\nResult: ${data.result_url}`;
+
+        return {
+          functionResponse: {
+            name: fc.name,
+            response: { result },
+          }
+        };
+      } catch (error) {
+        return {
+          functionResponse: {
+            name: fc.name,
+            response: { result: `❌ Error running ComfyUI workflow: ${error}` },
+          }
+        };
+      }
+    } else if (fc.name === 'generateProRealismVideo') {
+      const { prompt, source_video } = fc.args;
+      const backendBaseUrl = import.meta.env?.VITE_API_BASE_URL?.replace('/api/v1', '') || 'http://localhost:8000';
+
+      try {
+        const response = await fetch(`${backendBaseUrl}/api/comfy/chain/pro-realism`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt, source_video })
+        });
+        const data = await response.json();
+        const result = `✅ Pro-Realism Production Complete.\n- Hero Scene: ${data.hero_url}\n- Final Lip-Sync: ${data.final_url}`;
+
+        return {
+          functionResponse: {
+            name: fc.name,
+            response: { result },
+          }
+        };
+      } catch (error) {
+        return {
+          functionResponse: {
+            name: fc.name,
+            response: { result: `❌ Error in Pro-Realism production chain: ${error}` },
+          }
+        };
+      }
+    } else if (fc.name === 'stitchVideos') {
+      const { video_urls, output_filename } = fc.args as any;
+      try {
+        const response = await fetch(`${backendBaseUrl}/api/v1/generation/concatenate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ video_urls, output_filename })
+        });
+        const data = await response.json();
+        const result = `✅ Production Stitching Complete.\n- Final Delivery: ${data.result_url}\n- Segments Merged: ${data.segments_count}`;
+
+        return {
+          functionResponse: {
+            name: fc.name,
+            response: { result },
+          }
+        };
+      } catch (error) {
+        return {
+          functionResponse: {
+            name: fc.name,
+            response: { result: `❌ Error in production stitching: ${error}` },
+          }
+        };
+      }
     } else if (fc.name === 'showVision8Features') {
       const featuresOverview = `# 🎬 Vision8: AI-Powered Video Analysis & Generation Platform
 
@@ -834,12 +1015,12 @@ Find anything in your videos instantly:
 - **Dialogue search**: "When does Sarah mention the deadline?"
 - **Precise citations** with exact timestamps for every result
 
-### 🎨 **3. AI Video Generation**
-Replace any scene with AI-generated content:
-- **Conversational prompts**: "Make this scene more dramatic" or "Change it to nighttime"
-- **Multiple AI models**: Choose between Veo-3 and Sora-2 for different styles
-- **Quality control**: Draft, standard, or high-definition output
-- **Context-aware**: Uses original scene data for seamless integration
+### 🎨 **3. Pro-Realism AI Video Generation (ComfyUI)**
+Replace any scene with high-fidelity, production-quality content:
+- **Hero Scenes**: Ultra-realistic 4K video generation with dynamic camera paths
+- **Cinematic Relighting**: Transform the lighting and mood of existing footage
+- **Chained Workflows**: Seamlessly sequence generation and specialized lip-syncing
+- **Direct Control**: Use specialized technical workflows for grounded realism
 
 ### ✂️ **4. Smart Video Editing**
 Professional editing made simple:
