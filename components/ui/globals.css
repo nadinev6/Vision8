@@ -5,59 +5,71 @@
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --foreground: 0 0% 3.9%;
+
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 0 0% 3.9%;
+
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 0 70% 70%;
-    /* coral/pink accent color like in login */
-    --primary-foreground: 0 0% 100%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --popover-foreground: 0 0% 3.9%;
+
+    /* Crimson Red: HSL 0, 72%, 51% */
+    --primary: 0 72% 51%;
+    --primary-foreground: 0 0% 98%;
+
+    /* Sidebar / Muted / Secondary */
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 0 0% 9%;
+
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 45.1%;
+
+    --accent: 0 0% 96.1%;
+    --accent-foreground: 0 0% 9%;
+
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 0 72% 51%;
+
     --radius: 0.5rem;
+
+    /* Custom Panel Background for Sidebar-like containers */
+    --panel-bg: 0 0% 97%; /* Very light grey */
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 0 70% 70%;
-    /* same coral color in dark mode */
-    --primary-foreground: 0 0% 100%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+
+    --card: 0 0% 3.9%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 0 0% 3.9%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 0 72% 51%;
+    --primary-foreground: 0 0% 98%;
+
+    --secondary: 0 0% 14.9%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+
+    --accent: 0 0% 14.9%;
+    --accent-foreground: 0 0% 98%;
+
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 0 72% 51%;
+
+    --panel-bg: 0 0% 7%; /* Darker grey for sidebar in dark mode */
   }
 }
 
@@ -65,308 +77,17 @@
   * {
     @apply border-border;
   }
-
   body {
     @apply bg-background text-foreground;
   }
 }
 
-/* Preserve all your existing styling below */
-* {
-  box-sizing: border-box;
+/* Custom styles for high-priority dashboard vibe */
+.sidebar-active-item {
+  @apply bg-primary/10 text-primary font-medium;
 }
 
-html,
-body {
-  max-width: 100vw;
-  overflow-x: hidden;
-}
-
-/* Ultra-minimal scrollbar */
-.custom-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.08) transparent;
-}
-
-.custom-scrollbar::-webkit-scrollbar {
-  width: 3px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: rgba(0, 0, 0, 0.08);
-  border-radius: 2px;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.custom-scrollbar:hover::-webkit-scrollbar-thumb {
-  opacity: 1;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(0, 0, 0, 0.15);
-}
-
-.custom-scrollbar::-webkit-scrollbar-button {
-  display: none;
-}
-
-.custom-scrollbar::-webkit-scrollbar-corner {
-  background: transparent;
-}
-
-/* Invisible scrollbar */
-.scrollbar-none {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-.scrollbar-none::-webkit-scrollbar {
-  display: none;
-}
-
-/* Professional keyword highlighting */
-.keyword-highlight {
-  background: linear-gradient(120deg, hsl(var(--primary)) 0%, hsl(var(--primary)) 100%);
-  background-size: 100% 0.2em;
-  background-repeat: no-repeat;
-  background-position: 0 88%;
-  color: hsl(var(--primary));
-  font-weight: 500;
-  padding: 0;
-  border-radius: 0;
-  transition: all 0.2s ease;
-}
-
-.keyword-highlight:hover {
-  background-size: 100% 0.3em;
-  background-position: 0 85%;
-}
-
-/* Professional prose styling for assistant messages */
-.prose {
-  line-height: 1.7;
-  font-size: 14px;
-}
-
-.prose p {
-  margin-bottom: 0.75rem;
-  line-height: 1.6;
-}
-
-.prose p:last-child {
-  margin-bottom: 0;
-}
-
-.prose strong {
-  color: hsl(var(--foreground));
-  font-weight: 600;
-}
-
-.prose em {
-  color: hsl(var(--muted-foreground));
-  font-style: italic;
-}
-
-/* Clean assistant message formatting with markdown support */
-.assistant-message {
-  line-height: 1.6;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-  hyphens: auto;
-  max-width: 100%;
-  overflow-x: hidden;
-}
-
-.assistant-message .prose {
-  max-width: none;
-  color: hsl(var(--foreground));
-}
-
-.assistant-message .prose p {
-  margin-bottom: 0.75rem;
-  max-width: 100%;
-  overflow-wrap: break-word;
-  line-height: 1.6;
-}
-
-.assistant-message .prose p:last-child {
-  margin-bottom: 0;
-}
-
-.assistant-message .prose strong {
-  font-weight: 600;
-  color: hsl(var(--foreground));
-}
-
-.assistant-message .prose em {
-  font-style: italic;
-  color: hsl(var(--muted-foreground));
-}
-
-.assistant-message .prose code {
-  background-color: hsl(var(--muted));
-  padding: 0.125rem 0.25rem;
-  border-radius: 0.25rem;
-  font-size: 0.875rem;
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
-}
-
-.assistant-message .prose pre {
-  background-color: hsl(var(--muted));
-  padding: 0.75rem;
-  border-radius: 0.375rem;
-  overflow-x: auto;
-  font-size: 0.875rem;
-  margin: 0.75rem 0;
-}
-
-/* Markdown list support */
-.assistant-message .prose ul {
-  list-style-type: disc;
-  margin-left: 1.25rem;
-  margin-bottom: 0.75rem;
-  padding-left: 0.5rem;
-}
-
-.assistant-message .prose ol {
-  list-style-type: decimal;
-  margin-left: 1.25rem;
-  margin-bottom: 0.75rem;
-  padding-left: 0.5rem;
-}
-
-.assistant-message .prose li {
-  margin-bottom: 0.25rem;
-  line-height: 1.5;
-  max-width: 100%;
-  overflow-wrap: break-word;
-}
-
-/* Ensure buttons in assistant messages work */
-.assistant-message button {
-  pointer-events: auto;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-/* Prevent any element from causing overflow */
-.assistant-message * {
-  max-width: 100%;
-  overflow-wrap: break-word;
-}
-
-/* Standard shadcn timestamp buttons */
-.assistant-message button {
-  display: inline-flex !important;
-  align-items: center;
-  vertical-align: baseline;
-  margin: 0 2px;
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
-  font-size: 0.875rem;
-  line-height: 1.25rem;
-  padding: 0.125rem 0.375rem;
-  border-radius: 0.375rem;
-  border: 1px solid hsl(var(--border));
-  background-color: hsl(var(--muted));
-  color: hsl(var(--muted-foreground));
-  cursor: pointer;
-  transition: all 0.2s ease;
-  pointer-events: auto;
-}
-
-.assistant-message button:hover {
-  background-color: hsl(var(--accent));
-  color: hsl(var(--accent-foreground));
-}
-
-.assistant-message button:active {
-  background-color: hsl(var(--accent));
-  transform: translateY(1px);
-}
-
-/* Fix any potential stacking context issues */
-.assistant-message {
-  position: relative;
-  z-index: 1;
-}
-
-/* Video settings popover specific styling */
-.video-settings-popover {
-  position: absolute !important;
-  bottom: 100% !important;
-  right: 0 !important;
-  left: auto !important;
-  top: auto !important;
-  transform: none !important;
-  margin-bottom: 8px !important;
-  z-index: 50 !important;
-}
-
-/* Dialog animations */
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes zoom-in-95 {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-.animate-in {
-  animation-fill-mode: both;
-}
-
-.fade-in {
-  animation-name: fade-in;
-}
-
-.zoom-in-95 {
-  animation-name: zoom-in-95;
-}
-
-.duration-200 {
-  animation-duration: 200ms;
-}
-
-/* Clean video styling - no filters or overlays */
-
-/* Fix coral buttons to have WHITE text and icons (not black) */
-button[type="submit"],
-.send-button,
-.btn-primary,
-button.bg-primary {
-  background-color: hsl(var(--primary)) !important;
-  color: white !important;
-}
-
-button[type="submit"] svg,
-.send-button svg,
-.btn-primary svg,
-button.bg-primary svg,
-button[class*="bg-slate"] svg {
-  color: white !important;
-  fill: white !important;
-}
-
-/* Never use coral as text color - too light to read */
-.text-primary {
-  color: hsl(var(--foreground)) !important;
+/* Ensuring subtle borders as requested */
+.sidebar-container {
+  @apply border-r border-border/60;
 }

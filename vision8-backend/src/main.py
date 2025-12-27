@@ -36,10 +36,6 @@ class SimpleSettings:
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
     GEMINI_MODEL_NAME = os.getenv("GEMINI_MODEL_NAME", "gemini-2.5-flash-preview-05-20")
 
-    # Elasticsearch removed to eliminate costs
-    ELASTIC_URL = None
-    ELASTIC_API_KEY = None
-    ELASTIC_INDEX = None
 
     # Validate critical environment variables
     @classmethod
@@ -100,7 +96,6 @@ class ServiceRegistry:
     """Registry for managing application services."""
 
     def __init__(self):
-        self.elasticsearch = None
         self.metadata_generator = None
         self.conversation_handler = None
         self.cache_service = None
@@ -110,9 +105,6 @@ class ServiceRegistry:
         try:
             logger.info("Initializing application services...")
 
-            # Elasticsearch service removed to eliminate costs
-            logger.info("ℹ️ Elasticsearch service disabled to eliminate cloud costs")
-            self.elasticsearch = None
 
             # Initialize Metadata Generator
             try:
@@ -151,8 +143,6 @@ class ServiceRegistry:
                 except Exception as e:
                     logger.error("❌ Cache service shutdown failed", error=str(e))
             
-            # Elasticsearch service removed - no shutdown needed
-            logger.info("ℹ️ Elasticsearch service already disabled")
             
             logger.info("🎉 All services shut down successfully")
 
@@ -391,28 +381,15 @@ async def health_check() -> Dict[str, Any]:
     Health check endpoint to verify application status.
     """
     try:
-        # Elasticsearch removed - always report as disabled
-        es_healthy = False
-
-        # Count active services (excluding Elasticsearch)
-        active_services = sum([
-            bool(service_registry.metadata_generator),
-            bool(service_registry.cache_service)
-        ])
-
-        overall_status = "healthy" if active_services >= 1 else "degraded" if active_services >= 0 else "unhealthy"
-
         return {
-            "status": overall_status,
+            "status": "healthy",
             "version": "1.0.0",
             "services": {
-                "elasticsearch": "disabled",
                 "metadata_generator": "active" if service_registry.metadata_generator else "inactive",
                 "cache_service": "active" if service_registry.cache_service else "inactive"
             },
-            "active_services": active_services,
-            "total_services": 2,  # Reduced from 3 since Elasticsearch removed
-            "note": "Elasticsearch disabled to eliminate cloud costs"
+            "total_services": 2,
+            "note": "Supabase-powered search enabled"
         }
     except Exception as e:
         logger.error(f"Health check failed: {str(e)}")
@@ -470,19 +447,14 @@ async def api_test() -> Dict[str, Any]:
     Simple API test endpoint to verify the API is working.
     """
     return {
-        "message": "Vision8 Backend API is operational (Elasticsearch disabled)",
+        "message": "Vision8 Backend API is operational",
         "version": "1.0.0",
         "timestamp": datetime.utcnow().isoformat(),
         "environment": "production" if not settings.API_DEBUG_MODE else "development",
         "services_available": {
-            "elasticsearch": False,  # Always false now
             "metadata_generator": service_registry.metadata_generator is not None,
             "cache_service": service_registry.cache_service is not None
-        },
-        "notes": [
-            "Elasticsearch disabled to eliminate cloud costs",
-            "Video analysis and transcription remain functional"
-        ]
+        }
     }
 
 # Explicit OPTIONS handler for all API routes
@@ -532,6 +504,20 @@ try:
 except Exception as e:
     logger.error("❌ Failed to load Mux integration routes", error=str(e))
 
+try:
+    from api.comfy_router import router as comfy_router
+    app.include_router(comfy_router)
+    logger.info("✅ ComfyUI routes loaded")
+except Exception as e:
+    logger.error("❌ Failed to load ComfyUI routes", error=str(e))
+
+try:
+    from api.mcp_router import router as mcp_router
+    app.include_router(mcp_router)
+    logger.info("✅ MCP Server routes loaded")
+except Exception as e:
+    logger.error("❌ Failed to load MCP Server routes", error=str(e))
+
 
 # CORS preflight handler
 @app.options("/{path:path}")
@@ -568,18 +554,12 @@ async def api_status() -> Dict[str, Any]:
                 "health": f"{settings.API_BASE_URL}/health",
                 "cors_test": f"{settings.API_BASE_URL}/cors-test",
                 "video_analysis": f"{settings.API_BASE_URL}/api/v1/analysis/upload",
-                "search": f"{settings.API_BASE_URL}/api/v1/analysis/search (disabled)"
+                "search": f"{settings.API_BASE_URL}/api/v1/analysis/search"
             },
             "services": {
-                "elasticsearch": "disabled",
                 "metadata_generator": "active" if service_registry.metadata_generator else "inactive",
                 "cache_service": "active" if service_registry.cache_service else "inactive"
             },
-            "notes": [
-                "Elasticsearch search and indexing disabled to eliminate cloud costs",
-                "Video analysis and transcription still functional",
-                "Consider local alternatives for search if needed"
-            ],
             "timestamp": datetime.utcnow().isoformat()
         }
     except Exception as e:

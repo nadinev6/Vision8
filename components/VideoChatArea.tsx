@@ -1,9 +1,9 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { cn } from '../lib/utils';
 import { AssistantIcon, UserIcon } from './icons';
 import AIChatInput from './AIChatInput';
-import VideoPlayerPro from './VideoPlayerPro';
+import MuxVideoPlayer from './MuxVideoPlayer';
 import AIThinkingBlock from './AIThinkingBlock';
 import { Button } from './ui/button';
 import { Scene, TranscriptItem, TrackedObject } from './AnalysisPanel';
@@ -337,7 +337,7 @@ interface VideoChatAreaProps {
     primaryVideoRef: React.RefObject<HTMLVideoElement>;
     syncMode: 'none' | 'video';
     onSyncChange: () => void;
-    onVideoGenerate?: (model: string, prompt: string, settings: any) => void;
+    onVideoGenerate?: (model: string, frameData: any) => void;
     videoSettings: {
         playbackSpeed: number;
         trimStart: number;
@@ -347,7 +347,7 @@ interface VideoChatAreaProps {
         videoDuration: number;
     };
     generationSettings: {
-        model: 'veo3' | 'sora2';
+        model: 'wan2.2';
         frameRange: { start: number; end: number; duration: number };
         videoName: string;
     };
@@ -355,7 +355,7 @@ interface VideoChatAreaProps {
     onTrimRangeChange: (start: number, end: number) => void;
     onSyncModeChange: (mode: 'video' | 'none') => void;
     onFrameModeChange: (enabled: boolean) => void;
-    onGenerationModelChange: (model: 'veo3' | 'sora2') => void;
+    onGenerationModelChange: (model: 'wan2.2') => void;
     onGenerationFrameRangeChange: (start: number, end: number) => void;
     onGenerationVideoNameChange: (name: string) => void;
 }
@@ -390,37 +390,52 @@ const VideoChatArea: React.FC<VideoChatAreaProps> = ({
     onGenerationFrameRangeChange,
     onGenerationVideoNameChange
 }) => {
+    const [primaryTime, setPrimaryTime] = useState(0);
+    const [primaryDuration, setPrimaryDuration] = useState(0);
+    
+    const handlePrimaryTimeUpdate = (time: number) => {
+        setPrimaryTime(time);
+        onTimeUpdate?.(time);
+    };
+    
+    const handlePrimaryDurationChange = (duration: number) => {
+        setPrimaryDuration(duration);
+        onVideoDurationChange?.(duration);
+    };
+    
     return (
         <div className="flex-1 flex flex-col p-4 gap-4 min-w-0 relative">
             {/* Video Players */}
             <div className="flex gap-4">
-                <div className="flex-1 aspect-video rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
-                    <VideoPlayerPro
+                <div className="flex-1 aspect-video rounded-lg shadow-xl border border-border/50 dark:border-white/10 dark:shadow-[0_0_20px_rgba(255,255,255,0.03)] transition-all duration-300 relative group">
+                    <MuxVideoPlayer
                         ref={primaryVideoRef}
                         title="Upload a video to begin"
                         src={videoSrc}
-                        seekToTime={seekTime}
-                        onSeeked={onSeeked}
-                        onTimeUpdate={onTimeUpdate}
-                        onDurationChange={onVideoDurationChange}
-                        activeSyncMode={syncMode}
-                        onSyncChange={onSyncChange}
-                        onSceneTrim={onTrimRangeChange}
-                        isGeneratedVideo={false}
+                        className="w-full h-full rounded-lg"
+                        onTimeUpdate={handlePrimaryTimeUpdate}
+                        onDurationChange={handlePrimaryDurationChange}
                     />
+                    {/* Frame Count Overlay */}
+                    {videoSrc && (
+                        <div className="absolute top-4 left-4 bg-black/60 backdrop-blur-sm text-white px-3 py-1 rounded-md text-sm font-mono opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                            {Math.floor(primaryTime * 30)} / {Math.floor(primaryDuration * 30)}
+                        </div>
+                    )}
                 </div>
-                <div className="flex-1 aspect-video rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
-                    <VideoPlayerPro
+                <div className="flex-1 aspect-video rounded-lg shadow-xl border border-border/50 dark:border-white/10 dark:shadow-[0_0_20px_rgba(255,255,255,0.03)] transition-all duration-300 relative group">
+                    <MuxVideoPlayer
                         title="Generated Video"
                         src={generatedVideoSrc}
-                        syncMaster={syncMode === 'video' ? primaryVideoRef : null}
-                        forceMute={syncMode === 'video'}
-                        onSceneTrim={(startTime, endTime) => {
-                            console.log('Generation range selected:', { startTime, endTime });
-                            // TODO: Handle generation range selection
-                        }}
-                        isGeneratedVideo={true}
+                        className="w-full h-full rounded-lg"
+                        muted={syncMode === 'video'}
                     />
+                    {/* Frame Count Overlay */}
+                    {generatedVideoSrc && (
+                        <div className="absolute top-4 left-4 bg-black/60 backdrop-blur-sm text-white px-3 py-1 rounded-md text-sm font-mono opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                            Frame Count
+                        </div>
+                    )}
                 </div>
             </div>
 

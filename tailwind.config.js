@@ -16,30 +16,30 @@ export default {
 					DEFAULT: 'hsl(var(--primary))',
 					foreground: 'hsl(var(--primary-foreground))'
 				},
-				'primary-foreground': 'var(--primary-foreground)',
+				'primary-foreground': 'hsl(var(--primary-foreground))',
 				secondary: {
 					DEFAULT: 'hsl(var(--secondary))',
 					foreground: 'hsl(var(--secondary-foreground))'
 				},
-				'secondary-foreground': 'var(--secondary-foreground)',
+				'secondary-foreground': 'hsl(var(--secondary-foreground))',
 				accent: {
 					DEFAULT: 'hsl(var(--accent))',
 					foreground: 'hsl(var(--accent-foreground))'
 				},
-				'accent-foreground': 'var(--accent-foreground)',
+				'accent-foreground': 'hsl(var(--accent-foreground))',
 				muted: {
 					DEFAULT: 'hsl(var(--muted))',
 					foreground: 'hsl(var(--muted-foreground))'
 				},
-				'muted-foreground': 'var(--muted-foreground)',
+				'muted-foreground': 'hsl(var(--muted-foreground))',
 				border: 'hsl(var(--border))',
 				input: 'hsl(var(--input))',
 				card: {
 					DEFAULT: 'hsl(var(--card))',
 					foreground: 'hsl(var(--card-foreground))'
 				},
-				'card-foreground': 'var(--card-foreground)',
-				'panel-bg': 'var(--panel-bg)',
+				'card-foreground': 'hsl(var(--card-foreground))',
+				'panel-bg': 'hsl(var(--panel-bg))',
 				popover: {
 					DEFAULT: 'hsl(var(--popover))',
 					foreground: 'hsl(var(--popover-foreground))'

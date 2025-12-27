@@ -4,7 +4,8 @@ Transcription Result Processing Service
 This module handles post-processing of transcription results including:
 - Merging overlapping speech segments intelligently
 - Filtering out low-confidence transcriptions
-- Formatting transcription data for Elasticsearch storage
+- Filtering out low-confidence transcriptions
+- Formatting transcription data for storage
 """
 
 import logging
@@ -27,7 +28,7 @@ class TranscriptionProcessor:
     Service for processing and optimizing transcription results
     
     Handles intelligent segment merging, confidence filtering, and 
-    Elasticsearch document formatting according to requirements 2.4, 2.5, and 6.2
+    document formatting according to requirements.
     """
     
     def __init__(self, 
@@ -316,11 +317,9 @@ class TranscriptionProcessor:
             
         return text
     
-    def format_for_elasticsearch(self, result: TranscriptionResult) -> Dict[str, Any]:
+    def format_for_storage(self, result: TranscriptionResult) -> Dict[str, Any]:
         """
-        Format transcription result for Elasticsearch storage
-        
-        Implements requirement 6.2: Elasticsearch integration and indexing
+        Format transcription result for database storage
         """
         # Create the main transcript document
         transcript_doc = {
@@ -377,7 +376,7 @@ class TranscriptionProcessor:
             "time_markers": self._create_time_markers(result.segments)
         }
         
-        logger.info(f"Formatted transcription for Elasticsearch: {len(result.segments)} segments, "
+        logger.info(f"Formatted transcription for storage: {len(result.segments)} segments, "
                    f"{result.word_count} words")
         
         return transcript_doc

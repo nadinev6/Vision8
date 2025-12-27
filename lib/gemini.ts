@@ -1,7 +1,3 @@
-import { Scene, TranscriptItem, TrackedObject } from '../components/AnalysisPanel';
-import { formatTime } from "./utils";
-import { processVideoAnalysis, hybridSearch } from './elasticsearch';
-import { checkMigrationNeeded, performMigration } from './migrate-to-elasticsearch';
 import { backendService, isBackendAvailable } from './backend-integration';
 
 console.log("🚀 Gemini.ts module loaded!");
@@ -175,18 +171,6 @@ export async function analyzeVideo(videoFile: File, customVideoId?: string): Pro
   console.log("🎬 Starting video analysis...");
   console.log("Video file:", videoFile.name, "Size:", videoFile.size);
 
-  // Check if migration from IndexedDB to Elasticsearch is needed
-  try {
-    const needsMigration = await checkMigrationNeeded();
-    if (needsMigration) {
-      console.log('🔄 IndexedDB data detected, performing migration to Elasticsearch...');
-      const migrationStats = await performMigration();
-      console.log('📊 Migration completed:', migrationStats);
-    }
-  } catch (error) {
-    console.warn('⚠️ Migration check failed, continuing with analysis:', error);
-  }
-
   // Try backend analysis first
   try {
     console.log("🔄 Attempting backend video analysis...");
@@ -269,29 +253,35 @@ async function getVideoDetails(videoId: string): Promise<{ mux_playback_id?: str
 }
 
 /**
- * Convert backend analysis result to frontend format by searching Elasticsearch
+ * Convert backend analysis result to frontend format using the search API
  */
-async function convertBackendResultToFrontend(videoId: string): Promise<{ scenes: Scene[], transcripts: TranscriptItem[], objects: TrackedObject[], videoId: string, muxPlaybackId?: string }> {
+async function convertBackendResultToFrontend(videoId: string): Promise<{ scenes: any[], transcripts: any[], objects: any[], videoId: string, muxPlaybackId?: string }> {
   try {
-    // Search for all scenes from this video
-    const searchResults = await hybridSearch(`video_id:${videoId}`, videoId, 50);
+    // Search for all scenes from this video using the backend search
+    const backendUrl = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+    const response = await fetch(`${backendUrl}/video/search?query=*&video_id=${videoId}&max_results=50`);
 
-    const scenes: Scene[] = [];
-    const transcripts: TranscriptItem[] = [];
-    const objects: TrackedObject[] = [];
+    if (!response.ok) {
+      throw new Error(`Failed to fetch scenes for video: ${response.statusText}`);
+    }
 
-    for (const result of searchResults) {
-      const doc = result.document;
+    const searchData = await response.json();
+    const searchResults = searchData.results || [];
 
+    const scenes: any[] = [];
+    const transcripts: any[] = [];
+    const objects: any[] = [];
+
+    for (const doc of searchResults) {
       // Add scene
       scenes.push({
-        timestamp: doc.start_time_ms / 1000,
-        description: doc.scene_summary || doc.full_description
+        timestamp: doc.time_ms / 1000,
+        description: doc.summary || doc.description
       });
 
       // Add transcripts
-      if (doc.transcript_phrases) {
-        for (const phrase of doc.transcript_phrases) {
+      if (doc.transcript) {
+        for (const phrase of doc.transcript) {
           transcripts.push({
             startTime: phrase.start_ms / 1000,
             endTime: phrase.end_ms / 1000,
@@ -301,11 +291,11 @@ async function convertBackendResultToFrontend(videoId: string): Promise<{ scenes
       }
 
       // Add objects
-      if (doc.objects_tracked) {
-        for (const obj of doc.objects_tracked) {
+      if (doc.objects) {
+        for (const obj of doc.objects) {
           objects.push({
-            timestamp: doc.start_time_ms / 1000,
-            name: obj.label
+            timestamp: doc.time_ms / 1000,
+            name: obj.label || obj.name
           });
         }
       }
@@ -407,41 +397,8 @@ async function analyzeVideoClientSide(videoFile: File, customVideoId?: string): 
     console.log("Response:", response);
 
     const jsonText = response.text.trim();
-    console.log("Response text:", jsonText);
-
     const result = JSON.parse(jsonText);
     console.log("Parsed result:", result);
-
-    // Process and index to Elasticsearch
-    try {
-      const videoId = customVideoId || `video-${Date.now()}`;
-      const videoUrl = videoFile.name;
-
-      console.log('🔄 Processing analysis for Elasticsearch...');
-      console.log('Analysis result:', {
-        scenes: result.scenes?.length || 0,
-        transcripts: result.transcripts?.length || 0,
-        objects: result.objects?.length || 0
-      });
-
-      // Only index if we have scenes
-      if (result.scenes && result.scenes.length > 0) {
-        console.log('📊 Starting Elasticsearch processing with keyframe extraction...');
-        await processVideoAnalysis(videoId, videoUrl, result.scenes, result.transcripts || [], result.objects || [], videoFile);
-        console.log('✅ Elasticsearch processing completed');
-      } else {
-        console.log('⚠️ No scenes found, skipping Elasticsearch indexing');
-      }
-    } catch (elasticsearchError) {
-      console.error('⚠️ Elasticsearch processing failed (continuing anyway):', elasticsearchError);
-      console.error('Error details:', {
-        name: elasticsearchError instanceof Error ? elasticsearchError.name : 'Unknown',
-        message: elasticsearchError instanceof Error ? elasticsearchError.message : String(elasticsearchError),
-        stack: elasticsearchError instanceof Error ? elasticsearchError.stack : 'No stack'
-      });
-
-      // Don't throw - we still want to return the analysis results even if indexing fails
-    }
 
     return result;
   } catch (e) {
@@ -517,7 +474,7 @@ const generationSettingsControlTool: any = {
         description: 'The generation setting to change'
       },
       value: {
-        description: 'The new value. For model: "veo3" or "sora2". For frame_range: {start: number, end: number}. For video_name: string.'
+        description: 'The new value. For model: "wan2.2". For frame_range: {start: number, end: number}. For video_name: string.'
       },
       description: {
         type: Type.STRING,
@@ -591,73 +548,124 @@ const stitchVideosTool: any = {
   }
 };
 
+// =============================================================================
+// MCP Server Tools - Stateful Video Production Pipeline
+// =============================================================================
+
+const generatePlateTool: any = {
+  name: 'generatePlate',
+  description: "Creates a 5-8s video plate using Wan 2.2 with IP-Adapter environment lock. Stateful: remembers last seed and environment.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      prompt: { type: Type.STRING, description: "Creative prompt for the video generation" },
+      duration_seconds: { type: Type.NUMBER, description: "Plate duration (5-8s recommended)" },
+      resolution: { type: Type.STRING, description: "Resolution: '480p', '720p', '1080p', or '4k'" },
+      seed: { type: Type.NUMBER, description: "Random seed for reproducibility (uses last seed if omitted)" },
+      environment_lock_image: { type: Type.STRING, description: "IP-Adapter image path for environment consistency" }
+    },
+    required: ['prompt']
+  }
+};
+
+const upscaleExistingTool: any = {
+  name: 'upscaleExisting',
+  description: "Enhances resolution with 0.35 denoise pass, outputs 4K. Stateful: uses last render if no source specified.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      source_video: { type: Type.STRING, description: "Path to video to upscale (uses last render if omitted)" },
+      denoise_strength: { type: Type.NUMBER, description: "Denoise strength (0.0-1.0), default 0.35" },
+      target_resolution: { type: Type.STRING, description: "Target resolution: '1080p' or '4k'" }
+    }
+  }
+};
+
+const checkCreditsTool: any = {
+  name: 'checkCredits',
+  description: "Query ComfyUI Cloud to see remaining credits from the 4,200 budget.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {}
+  }
+};
+
+const getSessionContextTool: any = {
+  name: 'getSessionContext',
+  description: "Get current MCP session state including last render path, seed, and environment lock status.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {}
+  }
+};
+
+const setEnvironmentLockTool: any = {
+  name: 'setEnvironmentLock',
+  description: "Set IP-Adapter image for environment consistency across all renders in this session.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      image_path: { type: Type.STRING, description: "Path to environment lock image" }
+    },
+    required: ['image_path']
+  }
+};
+
 /**
- * Performs hybrid search using Elasticsearch with vector similarity and text matching.
- * Falls back to simple keyword search if Elasticsearch search fails.
+ * Performs semantic search using the Supabase-backed search endpoint.
  */
 async function searchVideoContext(
   query: string,
-  context: { scenes: Scene[], transcripts: TranscriptItem[], objects: TrackedObject[] }
+  context: { scenes: any[], transcripts: any[], objects: any[] }
 ): Promise<string> {
   const MAX_RESULTS = 5;
 
   // Check if backend is available first
   const backendAvailable = await isBackendAvailable();
-  console.log('🔍 Backend availability check:', backendAvailable);
-
   if (!backendAvailable) {
-    return `❌ **Backend Service Required**: The search functionality requires the Python backend to be running. Please start the backend service to use advanced video search capabilities.
-        
-**To start the backend:**
-1. Navigate to the vision8-backend folder
-2. Run: \`python -m uvicorn src.main:app --reload\`
-3. Ensure Elasticsearch is running
-
-**Current Status:** Backend offline - Advanced search unavailable.`;
+    return `❌ **Backend Service Required**: The search functionality requires the Python backend to be running.`;
   }
 
   try {
-    // Try Elasticsearch hybrid search with backend
-    console.log('🔍 Performing Elasticsearch hybrid search for:', query);
-    const searchResults = await hybridSearch(query, undefined, MAX_RESULTS);
+    console.log('🔍 Performing backend vector search for:', query);
+    const backendUrl = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+    const response = await fetch(`${backendUrl}/analysis/search?query=${encodeURIComponent(query)}&max_results=${MAX_RESULTS}`);
+
+    if (!response.ok) {
+      throw new Error(`Search failed: ${response.statusText}`);
+    }
+
+    const searchData = await response.json();
+    const searchResults = searchData.results || [];
 
     if (searchResults.length > 0) {
-      const results = searchResults.map(result => {
-        const doc = result.document;
-        const startTimeSec = doc.start_time_ms / 1000;
+      const results = searchResults.map((doc: any) => {
+        const startTimeSec = (doc.time_ms || doc.start_time_ms) / 1000;
         const parts: string[] = [];
 
-        // Add scene description
-        parts.push(`Scene at ${formatTime(startTimeSec)}: ${doc.scene_summary}`);
+        parts.push(`Scene at ${formatTime(startTimeSec)}: ${doc.summary || doc.description}`);
 
-        // Add relevant transcripts
-        if (doc.transcript_phrases.length > 0) {
-          doc.transcript_phrases.forEach(phrase => {
+        if (doc.transcript && doc.transcript.length > 0) {
+          doc.transcript.forEach((phrase: any) => {
             parts.push(`  Transcript: "${phrase.text}"`);
           });
         }
 
-        // Add tracked objects
-        if (doc.objects_tracked.length > 0) {
-          const objects = doc.objects_tracked.map(obj => obj.label).join(', ');
+        if (doc.objects && doc.objects.length > 0) {
+          const objects = doc.objects.map((obj: any) => obj.label || obj.name).join(', ');
           parts.push(`  Objects: ${objects}`);
         }
 
         return parts.join('\n');
       });
 
-      return `Found ${results.length} relevant items (Elasticsearch-powered search):\n\n${results.join('\n\n')}`;
+      return `Found ${results.length} relevant items (Vector Search powered):\n\n${results.join('\n\n')}`;
     } else {
-      return `🔍 **No Results Found**: No content matches your search query "${query}". The video has been analyzed and indexed, but no relevant scenes, transcripts, or objects were found.`;
+      return `🔍 **No Results Found**: No content matches your search query "${query}".`;
     }
   } catch (error) {
-    console.error('❌ Elasticsearch search failed:', error);
-    return `❌ **Search Error**: Failed to search video content. Error: ${error instanceof Error ? error.message : 'Unknown error'}
-        
-Please ensure:
-1. Backend service is running
-2. Elasticsearch is properly configured
-3. Video content has been analyzed and indexed`;
+    console.error('❌ Search failed:', error);
+    return `❌ **Search Error**: Failed to search video content. Error: ${error instanceof Error ? error.message : 'Unknown error'}`;
   }
 }
 
@@ -670,7 +678,7 @@ export interface VideoSettingsCallbacks {
 }
 
 export interface GenerationSettingsCallbacks {
-  onModelChange?: (model: 'veo3' | 'sora2') => void;
+  onModelChange?: (model: 'wan2.2') => void;
   onFrameRangeChange?: (start: number, end: number) => void;
   onVideoNameChange?: (name: string) => void;
 }
@@ -691,7 +699,7 @@ export async function generateChatResponseWithRAG(
     videoDuration: number;
   },
   generationSettings?: {
-    model: 'veo3' | 'sora2';
+    model: 'wan2.2';
     frameRange: { start: number; end: number; duration: number };
     videoName: string;
   },
@@ -711,7 +719,13 @@ export async function generateChatResponseWithRAG(
       showFeaturesTool,
       generateComfySceneTool,
       generateProRealismVideoTool,
-      stitchVideosTool
+      stitchVideosTool,
+      // MCP Server Tools - Stateful Pipeline
+      generatePlateTool,
+      upscaleExistingTool,
+      checkCreditsTool,
+      getSessionContextTool,
+      setEnvironmentLockTool
     ]
   }];
 
@@ -725,7 +739,7 @@ export async function generateChatResponseWithRAG(
   }
   if (generationSettings) {
     currentSettingsInfo += `\nCurrent Generation Settings:
-- AI Model: ${generationSettings.model === 'veo3' ? 'Veo 3' : 'Sora 2'}
+- AI Model: Wan 2.2
 - Frame Range: ${generationSettings.frameRange.start} to ${generationSettings.frameRange.end} frames (${generationSettings.frameRange.duration.toFixed(1)}s)
 - Video Name: ${generationSettings.videoName}`;
   }
@@ -791,10 +805,43 @@ For users on the Comfy Standard Plan, you MUST enforce these efficiency rules:
   4. Generate each segment individually.
   5. Use the \`stitchVideos\` tool to merge these segments into the final delivery.
 
+## 🏰 ENVIRONMENT FIDELITY PROTOCOL (SEGMENTED RENDERS)
+To prevent "Room Drift" (warping, lighting shifts, or object movement) between semantic segments, you MUST apply these consistency rules:
+1. **Iterative Frame Feeding (Last Frame Reference)**: For all segments after Segment 1, you MUST pass the final frame of the previous segment (N-1) as the \`SOURCE_IMAGE\` or \`START_IMAGE\` asset for the next segment (N). This creates a direct visual bridge.
+2. **Visual Memory (IP-Adapter Lock)**: Identify a "Master Frame" (usually the first frame of Segment 1). Pass this as the \`IP_ADAPTER_IMAGE\` for every segment in the production plan. This locks the environment's color palette, textures, and furniture layout.
+3. **Spatial Consistency (Seed & ControlNet)**:
+   - Use **Seed Synchronization**: For a static or slow-moving camera, recommend keeping the base seed consistent across segments while varying the temporal/noise seed.
+   - **Geometry Lock**: For segments requiring high architectural accuracy, use a Depth or Canny ControlNet pass using the Master Frame as the \`CONTROLNET_IMAGE\` reference.
+4. **Lighting Continuity**: Re-iterate lighting directives (e.g., "HDR Rembrandt lighting") in every segment's sub-prompt to ensure the AI doesn't drift into generic defaults.
+
+## 🔧 MCP SERVER TOOLS (STATEFUL PRODUCTION PIPELINE)
+You have access to stateful MCP tools that maintain context across calls:
+
+| Tool | Description | Statefulness |
+|------|-------------|--------------|
+| \`generatePlate\` | Generate 5-8s video with Wan 2.2 | Remembers seed, uses environment lock |
+| \`upscaleExisting\` | 4K upscale with 0.35 denoise | Uses last render if no source given |
+| \`checkCredits\` | Query remaining credits (4,200 budget) | Tracks usage across session |
+| \`getSessionContext\` | Get current state (last render, seed, etc.) | Full session introspection |
+| \`setEnvironmentLock\` | Lock IP-Adapter image for consistency | Persists across all renders |
+| \`stitchVideos\` | FFmpeg lossless merge of segments | Uses render history paths |
+
+**STATEFUL WORKFLOW EXAMPLE:**
+1. \`setEnvironmentLock\` → Lock master frame for consistency
+2. \`generatePlate\` (Segment 1) → Creates 720p proxy, stores path
+3. \`generatePlate\` (Segment 2) → Uses same seed/environment automatically
+4. \`stitchVideos\` → Merges using stored paths
+5. \`upscaleExisting\` → Upscales final stitch (no path needed, uses last)
+6. \`checkCredits\` → Verify budget status
+
+**IMPORTANT:** Always call \`getSessionContext\` at the start of complex productions to understand the current state.
+
 ## INSTRUCTIONS:
 - Always greet the user as "Vision Lead Technical & VFX Supervisor."
 - Use "base plates" and "VFX passes/renders" instead of "videos" or "segments."
 - For videos > 8s, always present a 'Production Plan' and use the \`stitchVideos\` tool.
+- Use MCP tools for stateful production workflows - they remember context!
+- Check credits with \`checkCredits\` before starting large renders.
 - Maintain the authoritative but supportive tone of a Technical Director.
 - Provide timestamp citations as [mm:ss].
 - Reflect the "VFX Workflow" in your reasoning/thought log.
@@ -884,9 +931,9 @@ For users on the Comfy Standard Plan, you MUST enforce these efficiency rules:
       try {
         switch (setting) {
           case 'model':
-            const model = value === 'sora2' ? 'sora2' : 'veo3';
+            const model = 'wan2.2';
             generationCallbacks?.onModelChange?.(model);
-            result = `✅ ${description} - Set generation model to ${model === 'veo3' ? 'Veo 3' : 'Sora 2'}`;
+            result = `✅ ${description} - Set generation model to Wan 2.2`;
             break;
           case 'frame_range':
             if (value && typeof value === 'object') {
@@ -973,6 +1020,7 @@ For users on the Comfy Standard Plan, you MUST enforce these efficiency rules:
       }
     } else if (fc.name === 'stitchVideos') {
       const { video_urls, output_filename } = fc.args as any;
+      const backendBaseUrl = import.meta.env?.VITE_API_BASE_URL?.replace('/api/v1', '') || 'http://localhost:8000';
       try {
         const response = await fetch(`${backendBaseUrl}/api/v1/generation/concatenate`, {
           method: 'POST',
@@ -1050,6 +1098,123 @@ Full control through conversation:
           response: { result: featuresOverview },
         }
       };
+    }
+
+    // ==========================================================================
+    // MCP Server Tools - Stateful Video Production Pipeline
+    // ==========================================================================
+    const mcpBaseUrl = import.meta.env?.VITE_API_BASE_URL?.replace('/api/v1', '') || 'http://localhost:8000';
+
+    if (fc.name === 'generatePlate') {
+      const { prompt, duration_seconds, resolution, seed, environment_lock_image } = fc.args as any;
+      try {
+        const response = await fetch(`${mcpBaseUrl}/api/mcp/generate-plate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt, duration_seconds, resolution, seed, environment_lock_image })
+        });
+        const data = await response.json();
+        return {
+          functionResponse: {
+            name: fc.name,
+            response: { result: data.message || `✅ Plate generated: ${data.output_path}` },
+          }
+        };
+      } catch (error) {
+        return {
+          functionResponse: {
+            name: fc.name,
+            response: { result: `❌ Generate plate failed: ${error}` },
+          }
+        };
+      }
+    } else if (fc.name === 'upscaleExisting') {
+      const { source_video, denoise_strength, target_resolution } = fc.args as any;
+      try {
+        const response = await fetch(`${mcpBaseUrl}/api/mcp/upscale`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ source_video, denoise_strength, target_resolution })
+        });
+        const data = await response.json();
+        return {
+          functionResponse: {
+            name: fc.name,
+            response: { result: data.message || `✅ Upscaled to ${target_resolution}: ${data.output_path}` },
+          }
+        };
+      } catch (error) {
+        return {
+          functionResponse: {
+            name: fc.name,
+            response: { result: `❌ Upscale failed: ${error}` },
+          }
+        };
+      }
+    } else if (fc.name === 'checkCredits') {
+      try {
+        const response = await fetch(`${mcpBaseUrl}/api/mcp/credits`);
+        const data = await response.json();
+        return {
+          functionResponse: {
+            name: fc.name,
+            response: { result: data.message || `Credits: ${data.credits_remaining}/${data.total_credits}` },
+          }
+        };
+      } catch (error) {
+        return {
+          functionResponse: {
+            name: fc.name,
+            response: { result: `⚠️ Could not check credits: ${error}` },
+          }
+        };
+      }
+    } else if (fc.name === 'getSessionContext') {
+      try {
+        const response = await fetch(`${mcpBaseUrl}/api/mcp/session`);
+        const data = await response.json();
+        const contextStr = `📋 Session Context:
+- Last Render: ${data.last_render_path || 'None'}
+- Resolution: ${data.last_plate_resolution}
+- Seed: ${data.last_seed}
+- Environment Lock: ${data.environment_lock_image ? 'Active' : 'Not set'}
+- Renders: ${data.render_count}
+- Credits: ${data.credits_remaining}`;
+        return {
+          functionResponse: {
+            name: fc.name,
+            response: { result: contextStr },
+          }
+        };
+      } catch (error) {
+        return {
+          functionResponse: {
+            name: fc.name,
+            response: { result: `⚠️ Could not get session: ${error}` },
+          }
+        };
+      }
+    } else if (fc.name === 'setEnvironmentLock') {
+      const { image_path } = fc.args as any;
+      try {
+        const response = await fetch(`${mcpBaseUrl}/api/mcp/environment-lock?image_path=${encodeURIComponent(image_path)}`, {
+          method: 'POST'
+        });
+        const data = await response.json();
+        return {
+          functionResponse: {
+            name: fc.name,
+            response: { result: data.message || `🔒 Environment locked` },
+          }
+        };
+      } catch (error) {
+        return {
+          functionResponse: {
+            name: fc.name,
+            response: { result: `❌ Set environment lock failed: ${error}` },
+          }
+        };
+      }
     }
     return {
       functionResponse: {

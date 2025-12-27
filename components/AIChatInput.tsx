@@ -1,17 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
-import { LightbulbIcon as Lightbulb, MicIcon as Mic, VideoSearchIcon, VideoIcon, SendIcon as Send, RotateCwIcon, SparklesIcon } from './icons';
+import { LightbulbIcon as Lightbulb, MicIcon as Mic, VideoSearchIcon, VideoIcon, SendIcon as Send, RotateCwIcon } from './icons';
+import { AiGenerate2Line, GenerateImageIcon, Image } from './svg.tsx';
 import { cn } from '../lib/utils';
 import VideoGenerationDialog from './VideoGenerationDialog';
-import { hybridSearch } from '../lib/elasticsearch';
-
-const PLACEHOLDERS = [
-  "Generate frames 100 to 200",
-  "Switch to Veo 3 and generate a replacement for the first scene",
-  "Name this video 'Sunset Scene'",
-  "Make the lighting more cinematic and dramatic",
-  "How many scenes need to be changed in order to replace the cat?",
-  "Change the dialogue to 'Hello there!'"
-];
+import { searchEnhanced } from '../lib/backend-integration';
+import { imageGenerationService } from '../lib/image-generation';
 
 interface AIChatInputProps {
   onVideoUpload: (file: File) => void;
@@ -24,29 +17,15 @@ interface AIChatInputProps {
 }
 
 const AIChatInput: React.FC<AIChatInputProps> = ({ onVideoUpload, onAnalyze, isAnalyzing, isVideoLoaded, onSendMessage, onVideoGenerate, currentVideoId }) => {
-  const [placeholderIndex, setPlaceholderIndex] = useState(0);
-  const [showPlaceholder, setShowPlaceholder] = useState(true);
   const [isActive, setIsActive] = useState(false);
   const [videoSearchActive, setVideoSearchActive] = useState(false);
-  const [generateActive, setGenerateActive] = useState(false);
+  const [generateVideoActive, setGenerateVideoActive] = useState(false);
+  const [generateImageActive, setGenerateImageActive] = useState(false);
   const [showGenerateDialog, setShowGenerateDialog] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const wrapperRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (isActive || inputValue) return;
-
-    const interval = setInterval(() => {
-      setShowPlaceholder(false);
-      setTimeout(() => {
-        setPlaceholderIndex((prev) => (prev + 1) % PLACEHOLDERS.length);
-        setShowPlaceholder(true);
-      }, 400);
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, [isActive, inputValue]);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -68,6 +47,38 @@ const AIChatInput: React.FC<AIChatInputProps> = ({ onVideoUpload, onAnalyze, isA
     fileInputRef.current?.click();
   };
 
+  const handleImageClick = () => {
+    imageInputRef.current?.click();
+  };
+
+  const handleImageChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      try {
+        console.log('Uploading image:', {
+          name: file.name,
+          type: file.type,
+          size: file.size,
+        });
+
+        // Upload reference image
+        const imageMetadata = await imageGenerationService.uploadReferenceImage(file, 'reference');
+        console.log('Image uploaded successfully:', imageMetadata);
+
+        // Send notification to user
+        const message = `Image "${file.name}" uploaded and available for reference.`;
+        onSendMessage(message);
+
+        // Reset input
+        event.target.value = '';
+      } catch (error) {
+        console.error('Image upload error:', error);
+        const errorMessage = `Image upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        onSendMessage(errorMessage);
+      }
+    }
+  };
+
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -77,7 +88,7 @@ const AIChatInput: React.FC<AIChatInputProps> = ({ onVideoUpload, onAnalyze, isA
         size: file.size,
         lastModified: file.lastModified
       });
-      
+
       if (file.type.startsWith('video/')) {
         try {
           onVideoUpload(file);
@@ -108,8 +119,8 @@ const AIChatInput: React.FC<AIChatInputProps> = ({ onVideoUpload, onAnalyze, isA
     try {
       console.log('Performing video search for:', query);
 
-      // Perform hybrid search using Supabase (replaces Elasticsearch)
-      const searchResults = await hybridSearch(query, currentVideoId, 5);
+      // Perform search using the enhanced search function (Supabase-backed)
+      const searchResults = await searchEnhanced(query, { videoId: currentVideoId, topK: 5 });
 
       if (searchResults.length > 0) {
         console.log(`Found ${searchResults.length} search results`);
@@ -140,6 +151,55 @@ const AIChatInput: React.FC<AIChatInputProps> = ({ onVideoUpload, onAnalyze, isA
     }
   };
 
+  const handleGenerateImage = async () => {
+    if (!inputValue.trim()) {
+      alert('Please enter a prompt for image generation');
+      return;
+    }
+
+    try {
+      console.log('Starting image generation with prompt:', inputValue);
+
+      // Initiate image generation
+      const response = await imageGenerationService.generateImage({
+        image_id: `img_${Date.now()}`,
+        prompt: inputValue.trim(),
+        model: 'imagen3',
+        quality: 'standard',
+      });
+
+      console.log('Image generation started:', response);
+
+      // Send message about generation start
+      onSendMessage(`Image generation started: "${inputValue.trim()}"\nJob ID: ${response.job_id}`);
+
+      // Reset input and toggle
+      setInputValue('');
+      setGenerateImageActive(false);
+
+      // Poll for generation status
+      try {
+        const finalStatus = await imageGenerationService.pollGenerationStatus(response.job_id, 60, 2000);
+
+        if (finalStatus.status === 'completed' && finalStatus.generation_url) {
+          const completedMessage = `Image generation completed!\n\n![Generated Image](${finalStatus.generation_url})`;
+          onSendMessage(completedMessage);
+        } else if (finalStatus.status === 'error') {
+          const errorMessage = `Image generation failed: ${finalStatus.error_message}`;
+          onSendMessage(errorMessage);
+        }
+      } catch (pollError) {
+        console.warn('Poll timeout or error:', pollError);
+        onSendMessage(`Image generation in progress. Job ID: ${response.job_id}`);
+      }
+    } catch (error) {
+      console.error('Image generation error:', error);
+      const errorMessage = `Image generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      onSendMessage(errorMessage);
+      setGenerateImageActive(false);
+    }
+  };
+
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter') {
       handleSend();
@@ -152,7 +212,7 @@ const AIChatInput: React.FC<AIChatInputProps> = ({ onVideoUpload, onAnalyze, isA
     <div
       ref={wrapperRef}
       className={cn(
-        "w-full max-w-2xl bg-card rounded-[32px] overflow-hidden transition-all duration-300 ease-in-out",
+        "w-full max-w-2xl bg-card rounded-[32px] overflow-hidden transition-all duration-300 ease-in-out dark:border dark:border-white/20",
         isExpanded ? "h-32 shadow-xl" : "h-[68px] shadow-md"
       )}
       onClick={handleActivate}
@@ -166,6 +226,13 @@ const AIChatInput: React.FC<AIChatInputProps> = ({ onVideoUpload, onAnalyze, isA
             accept="video/*"
             style={{ display: 'none' }}
           />
+          <input
+            type="file"
+            ref={imageInputRef}
+            onChange={handleImageChange}
+            accept="image/*"
+            style={{ display: 'none' }}
+          />
           <button
             className="p-3 rounded-full hover:bg-secondary transition"
             title="Upload a video"
@@ -175,24 +242,25 @@ const AIChatInput: React.FC<AIChatInputProps> = ({ onVideoUpload, onAnalyze, isA
             <VideoIcon size={20} />
           </button>
 
+          <button
+            className="p-3 rounded-full hover:bg-secondary transition"
+            title="Upload image for reference"
+            type="button"
+            onClick={handleImageClick}
+          >
+            <Image className="w-5 h-5" />
+          </button>
+
           <div className="relative flex-1">
             <input
               type="text"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
-              className="flex-1 border-0 outline-0 rounded-md py-2 text-base bg-transparent w-full font-normal relative z-10 focus:ring-0"
+              placeholder={videoSearchActive ? "Search for scenes, dialogue, or objects in your video..." : "Type your message..."}
+              className="flex-1 border-0 outline-0 rounded-md py-2 text-base bg-transparent w-full font-normal relative z-10 focus:ring-0 dark:text-white dark:placeholder-gray-400"
               onFocus={handleActivate}
             />
-            <div className={cn(
-              "absolute left-0 top-1/2 -translate-y-1/2 text-muted-foreground select-none pointer-events-none transition-opacity duration-300",
-              showPlaceholder && !isExpanded ? "opacity-100" : "opacity-0"
-            )}>
-              {videoSearchActive 
-                ? "Search for scenes, dialogue, or objects in your video..."
-                : PLACEHOLDERS[placeholderIndex]
-              }
-            </div>
           </div>
 
           <button
@@ -270,30 +338,57 @@ const AIChatInput: React.FC<AIChatInputProps> = ({ onVideoUpload, onAnalyze, isA
             </button>
 
             {onVideoGenerate && (
-              <button
-                className={cn(`flex items-center gap-1 py-2 rounded-full transition-all duration-300 font-medium whitespace-nowrap`,
-                  generateActive
-                    ? "bg-secondary text-secondary-foreground font-semibold w-fit px-4 justify-start overflow-hidden"
-                    : "bg-secondary text-secondary-foreground hover:bg-accent hover:text-accent-foreground w-12 px-3 justify-center"
-                )}
-                title="Generate Video"
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (generateActive) {
-                    setShowGenerateDialog(true);
-                  } else {
-                    setGenerateActive(true);
-                  }
-                }}
-              >
-                <div className="flex-shrink-0 flex items-center justify-center min-w-[20px]">
-                  <SparklesIcon size={20} />
-                </div>
-                <span className={cn("pb-px transition-opacity", generateActive ? "opacity-100 delay-200" : "opacity-0 w-0")}>
-                  Generate
-                </span>
-              </button>
+              <>
+                <button
+                  className={cn(`flex items-center gap-1 py-2 rounded-full transition-all duration-300 font-medium whitespace-nowrap`,
+                    generateVideoActive
+                      ? "bg-secondary text-secondary-foreground font-semibold w-fit px-4 justify-start overflow-hidden"
+                      : "bg-secondary text-secondary-foreground hover:bg-accent hover:text-accent-foreground w-12 px-3 justify-center"
+                  )}
+                  title="Generate Video"
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (generateVideoActive) {
+                      setShowGenerateDialog(true);
+                    } else {
+                      setGenerateVideoActive(true);
+                    }
+                  }}
+                >
+                  <div className="flex-shrink-0 flex items-center justify-center min-w-[20px]">
+                    <AiGenerate2Line className="w-5 h-5" />
+                  </div>
+                  <span className={cn("pb-px transition-opacity", generateVideoActive ? "opacity-100 delay-200" : "opacity-0 w-0")}>
+                    Generate Video
+                  </span>
+                </button>
+
+                <button
+                  className={cn(`flex items-center gap-1 py-2 rounded-full transition-all duration-300 font-medium whitespace-nowrap`,
+                    generateImageActive
+                      ? "bg-secondary text-secondary-foreground font-semibold w-fit px-4 justify-start overflow-hidden"
+                      : "bg-secondary text-secondary-foreground hover:bg-accent hover:text-accent-foreground w-12 px-3 justify-center"
+                  )}
+                  title="Generate Image"
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (generateImageActive) {
+                      handleGenerateImage();
+                    } else {
+                      setGenerateImageActive(true);
+                    }
+                  }}
+                >
+                  <div className="flex-shrink-0 flex items-center justify-center min-w-[20px]">
+                    <GenerateImageIcon className="w-5 h-5" />
+                  </div>
+                  <span className={cn("pb-px transition-opacity", generateImageActive ? "opacity-100 delay-200" : "opacity-0 w-0")}>
+                    Generate Image
+                  </span>
+                </button>
+              </>
             )}
           </div>
         </div>

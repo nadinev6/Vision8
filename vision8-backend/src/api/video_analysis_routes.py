@@ -1,8 +1,8 @@
 """
 Video Analysis API Routes
 
-This module provides endpoints for video analysis, metadata extraction,
-and Elasticsearch integration.
+This module provides endpoints for uploading videos, analyzing content,
+and searching through indexed video data.
 """
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
@@ -70,12 +70,7 @@ async def analyze_video(
     """
     Upload and analyze a video file with optional audio transcription.
     
-    This endpoint:
-    1. Accepts a video file upload
-    2. Optionally generates accurate audio transcription
-    3. Generates metadata and scene analysis
-    4. Creates embeddings for the content
-    5. Indexes the data in Elasticsearch with enhanced transcript data
+    5. Indexes the data in Supabase with vector embeddings.
     
     Args:
         file: The video file to analyze
@@ -212,8 +207,6 @@ async def analyze_video(
             raise
         
         # Process and index the metadata - ALWAYS create documents
-        indexed_count = 0
-        failed_count = 0
         documents = []
         
         if metadata_result and "scenes" in metadata_result and len(metadata_result["scenes"]) > 0:
@@ -225,7 +218,6 @@ async def analyze_video(
             accurate_transcript = metadata_result.get("accurate_transcript", {})
             
             for scene in metadata_result["scenes"]:
-                # Create document structure for Elasticsearch with proper field mapping
                 doc = {
                     "video_id": video_id,
                     "scene_id": f"{video_id}_scene_{scene.get('scene_number', len(documents) + 1)}",
@@ -233,10 +225,10 @@ async def analyze_video(
                     "end_time_ms": scene.get("end_time_ms", 5000),
                     "scene_summary": scene.get("scene_summary", scene.get("summary", f"Scene {len(documents) + 1} content")),
                     "full_description": scene.get("full_description", scene.get("description", f"Video scene {len(documents) + 1} with visual content")),
-                    "scene_embedding": scene.get("embedding", [0.1] * 768),  # Ensure proper embedding
-                    "transcript_phrases": scene.get("transcript", []),
-                    "objects_tracked": scene.get("objects_tracked", scene.get("objects", [])),
-                    "actions_detected": scene.get("actions_detected", scene.get("actions", ["video_content"]))
+                    "scene_embedding": scene.get("embedding", [0.1] * 768),
+                    "transcript": scene.get("transcript", []),
+                    "objects": scene.get("objects_tracked", scene.get("objects", [])),
+                    "actions": scene.get("actions_detected", scene.get("actions", ["video_content"]))
                 }
                 
                 # Add accurate transcription data if available
@@ -282,28 +274,16 @@ async def analyze_video(
                 "end_time_ms": metadata_result.get("duration_ms", 30000),
                 "scene_summary": f"Video content for {video_id}",
                 "full_description": f"This video has been processed and is available for search and analysis.",
-                "scene_embedding": [0.1] * 768,
-                "transcript_phrases": metadata_result.get("transcript", []),
-                "objects_tracked": [{"label": "video_content", "track_id": "content_1", "confidence": 0.8}],
-                "actions_detected": ["video_processing"]
+                "scene_embedding": [0.1] * 768
             }
             
-            # Add transcription if available
+            # Add basic transcript info if available
             if transcription_result:
-                transcript_segments = []
-                for segment in transcription_result.segments:
-                    transcript_segments.append({
-                        "text": getattr(segment, 'text', ''),
-                        "start_ms": getattr(segment, 'start_time_ms', 0),
-                        "end_ms": getattr(segment, 'end_time_ms', 0),
-                        "speaker": getattr(segment, 'speaker_id', 'unknown')
-                    })
-                
                 fallback_doc["accurate_transcript"] = {
-                    "segments": transcript_segments,
-                    "text": " ".join(getattr(seg, 'text', '') for seg in transcription_result.segments),
+                    "segments": [],
+                    "text": transcription_result.full_transcript,
                     "confidence": transcription_result.confidence,
-                    "word_count": sum(len(getattr(seg, 'text', '').split()) for seg in transcription_result.segments)
+                    "word_count": transcription_result.word_count
                 }
             
             documents.append(fallback_doc)
@@ -426,10 +406,11 @@ async def search_video_content(
                    video_id=video_id,
                    min_score=min_score)
 
-        # Generate embedding for the query (simplified - in production you'd use Gemini API)
-        # For now, we'll use a mock embedding - replace with actual embedding generation
-        import numpy as np
-        query_embedding = np.random.rand(768).tolist()  # Mock 768-dim embedding
+        # Generate REAL embedding for the query using MetadataGenerator
+        if not metadata_generator:
+            raise HTTPException(status_code=503, detail="Metadata generator not available for embeddings")
+        
+        query_embedding = await metadata_generator.generate_text_embedding(query)
 
         # Perform search
         results = await supabase_service.search_video_content(
@@ -459,109 +440,6 @@ async def search_video_content(
         }
 
 
-@router.post("/test-index")
-async def test_index_document() -> Dict[str, Any]:
-    """
-    Test indexing disabled - Elasticsearch removed to eliminate costs.
-    """
-    return {
-        "status": "disabled",
-        "message": "Indexing functionality has been disabled to eliminate cloud costs",
-        "document_indexed": False
-    }
-
-
-@router.get("/test-search")
-async def test_search(query: str = "video") -> Dict[str, Any]:
-    """
-    Test search functionality disabled - Elasticsearch removed to eliminate costs.
-    """
-    return {
-        "status": "disabled",
-        "message": "Search functionality has been disabled to eliminate cloud costs",
-        "total_documents": 0,
-        "documents_found": 0,
-        "sample_documents": []
-    }
-
-
-@router.get("/elasticsearch/status")
-async def elasticsearch_status() -> Dict[str, Any]:
-    """
-    Elasticsearch status - service removed to eliminate costs.
-
-    Returns:
-        Status indicating Elasticsearch has been disabled
-    """
-    return {
-        "status": "disabled",
-        "message": "Elasticsearch service has been removed to eliminate cloud costs",
-        "index_name": None,
-        "index_exists": False,
-        "index_stats": {},
-        "timestamp": datetime.utcnow().isoformat()
-    }
-
-
-@router.get("/scene/{video_id}/{scene_id}")
-async def get_scene_context(video_id: str, scene_id: str) -> Dict[str, Any]:
-    """
-    Scene context retrieval disabled - Elasticsearch removed to eliminate costs.
-
-    Args:
-        video_id: The video identifier (ignored)
-        scene_id: The scene identifier (ignored)
-
-    Returns:
-        Error response since functionality is disabled
-    """
-    raise HTTPException(
-        status_code=503,
-        detail="Scene context retrieval has been disabled to eliminate cloud costs"
-    )
-
-
-@router.post("/test-pipeline")
-async def test_analysis_pipeline() -> Dict[str, Any]:
-    """
-    Test the analysis pipeline - Elasticsearch components disabled to eliminate costs
-    """
-    try:
-        # Initialize services
-        services_ready = initialize_services()
-
-        if not services_ready:
-            return {
-                "status": "failed",
-                "error": "Services not available",
-                "elasticsearch_available": False,  # Always false now
-                "metadata_generator_available": metadata_generator is not None,
-                "audio_service_available": audio_transcription_service is not None
-            }
-
-        return {
-            "status": "completed",
-            "timestamp": datetime.utcnow().isoformat(),
-            "services": {
-                "elasticsearch_status": "disabled",
-                "indexing_test": "disabled",
-                "search_test": "disabled",
-                "metadata_generator_ready": metadata_generator is not None,
-                "audio_service_ready": audio_transcription_service is not None
-            },
-            "recommendations": [
-                "Elasticsearch services have been disabled to eliminate cloud costs",
-                "Video analysis and transcription still work without search/indexing",
-                "Consider using local storage or alternative search solutions if needed"
-            ]
-        }
-
-    except Exception as e:
-        return {
-            "status": "failed",
-            "error": str(e),
-            "timestamp": datetime.utcnow().isoformat()
-        }
 
 
 @router.delete("/video/{video_id}")
@@ -617,3 +495,34 @@ async def delete_video_data(video_id: str) -> Dict[str, Any]:
             "error": str(e),
             "timestamp": datetime.utcnow().isoformat()
         }
+
+@router.get("/video/{video_id}")
+async def get_video_details(video_id: str) -> Dict[str, Any]:
+    """
+    Get details for a specific video including Mux playback ID.
+    
+    Args:
+        video_id: The video ID
+        
+    Returns:
+        Video details
+    """
+    initialize_services()
+    
+    if not supabase_service or not supabase_service.is_available():
+        raise HTTPException(status_code=503, detail="Supabase not available")
+        
+    try:
+        video = await supabase_service.get_video(video_id)
+        if not video:
+            raise HTTPException(status_code=404, detail="Video not found")
+            
+        return {
+            "status": "success",
+            "video": video
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("get_video_details_failed", video_id=video_id, error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))

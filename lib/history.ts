@@ -2,15 +2,17 @@ import { Message } from '../components/VideoChatArea';
 import { Scene, TranscriptItem, TrackedObject } from '../components/AnalysisPanel';
 
 export interface ChatSession {
-    id: string; 
+    id: string;
     name: string;
-    createdAt: string; 
+    createdAt: string;
     videoName: string | null;
     messages: Message[];
     scenes: Scene[];
     transcripts: TranscriptItem[];
     objects: TrackedObject[];
     lastTimestamp: number;
+    videoId?: string;
+    muxPlaybackId?: string;
 }
 
 const HISTORY_KEY = 'vision8-chat-history';

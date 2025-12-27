@@ -1,26 +1,34 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import LandingPage from './components/LandingPage';
-import LoginModal from './components/LoginModal';
+import AuthPage from './components/AuthPage';
 import HistorySidebar from './components/HistorySidebar';
 import AnalysisPanel, { Scene, TranscriptItem, TrackedObject } from './components/AnalysisPanel';
+import AnalyticsDashboard from './components/AnalyticsDashboard';
+import ContentLibrary from './components/ContentLibrary';
 import VideoChatArea, { Message, UserMessage, ReasoningMessage, AssistantMessage } from './components/VideoChatArea';
 import VideoNameDialog from './components/VideoNameDialog';
-import { LogoIcon, UserIcon } from './components/icons';
+import UserProfilePage from './components/UserProfilePage';
+import { LogoIcon, UserIcon, FolderIcon, BarChartIcon } from './components/icons';
+import ThemeToggle from './components/ThemeToggle';
 import { analyzeVideo, generateChatResponseWithRAG, VideoSettingsCallbacks, GenerationSettingsCallbacks } from './lib/gemini';
 import { getHistory, saveHistory, ChatSession } from './lib/history';
 import { uploadVideo } from './lib/storage';
 import './lib/cache-debug'; // Load cache debug utilities
+import { uploadVideoToMux } from './lib/mux';
+import { Toaster, toast } from './components/ui/toaster';
 
 
 // Main App Component (authenticated)
 const AuthenticatedApp: React.FC = () => {
-    const { logout, user } = useAuth();
+    const { logout, user, userProfile } = useAuth();
     const [isHistoryOpen, setIsHistoryOpen] = useState(true);
     const [rightPanelWidth, setRightPanelWidth] = useState(400);
     const [seekTime, setSeekTime] = useState<number | null>(null);
     const [activeTimestamp, setActiveTimestamp] = useState<number | null>(null);
     const [activeAnalysisTab, setActiveAnalysisTab] = useState('scene');
+    const [activeView, setActiveView] = useState('editor'); // 'editor' | 'content' | 'analytics'
 
     // State for video player synchronization and settings
     const primaryVideoRef = useRef<HTMLVideoElement>(null);
@@ -32,7 +40,7 @@ const AuthenticatedApp: React.FC = () => {
     const [videoDuration, setVideoDuration] = useState(0);
 
     // Generation settings
-    const [generationModel, setGenerationModel] = useState<'veo3' | 'sora2'>('veo3');
+    const [generationModel, setGenerationModel] = useState<'wan2.2'>('wan2.2');
     const [generationFrameRange, setGenerationFrameRange] = useState({ start: 0, end: 100, duration: 3.33 });
     const [generationVideoName, setGenerationVideoName] = useState('Current Video');
 
@@ -95,26 +103,35 @@ const AuthenticatedApp: React.FC = () => {
         }
     }, [videoFile]);
 
+
+
     const handleVideoUpload = async (file: File) => {
         console.log("handleVideoUpload called with file:", file.name, file.type, "Size:", file.size);
 
         // Check file size (limit to 200MB)
         if (file.size > 200 * 1024 * 1024) {
             setAnalysisError("File too large. Please select a video smaller than 200MB.");
+            toast.error('File too large', {
+                description: 'Please select a video smaller than 200MB.',
+            });
             return;
         }
 
         try {
-            let videoUrl: string | undefined;
-            
-            // Upload to Firebase Storage if user is authenticated
-            if (user?.uid) {
-                console.log("Uploading video to Firebase Storage for user:", user.uid);
+            // Upload to Mux if user is authenticated
+            if (user?.id) {
+                console.log("Uploading video to Mux for user:", user.id);
                 try {
-                    videoUrl = await uploadVideo(file, user.uid, file.name);
-                    console.log("✅ Video uploaded to Firebase Storage:", videoUrl);
+                    // Start Mux upload in background (or await if we want to block)
+                    // We'll await it for now to ensure we have the ID, though Mux processing takes time
+                    const uploadId = await uploadVideoToMux(file, user.id);
+                    console.log("✅ Video uploaded to Mux. Upload ID:", uploadId);
+
+                    // Note: We don't get the Playback ID immediately. 
+                    // It will be updated via webhook -> Supabase -> Poll/Fetch later
                 } catch (uploadError) {
-                    console.warn("Firebase upload failed, continuing with local storage:", uploadError);
+                    console.warn("Mux upload failed, continuing with local storage:", uploadError);
+                    setAnalysisError("Video upload failed. Using local preview.");
                 }
             }
 
@@ -126,6 +143,8 @@ const AuthenticatedApp: React.FC = () => {
                 messages: [],
                 scenes: [], transcripts: [], objects: [],
                 lastTimestamp: 0,
+                // We don't have videoId (UUID) or muxPlaybackId yet
+                // Ideally, uploadVideoToMux could return the DB record ID too
             };
 
             console.log("Creating new session:", newSession.id);
@@ -136,15 +155,18 @@ const AuthenticatedApp: React.FC = () => {
             setVideoFile(file);
             setAnalysisError(null);
             setActiveTimestamp(0);
-            
-            if (videoUrl) {
-                console.log("✅ Video stored in Firebase and available at:", videoUrl);
-            }
-            
+
             console.log("Video upload process completed successfully for file:", file.name);
+            toast.success('Video uploaded', {
+                description: `${file.name} is ready for analysis.`,
+            });
         } catch (error) {
             console.error("Error in handleVideoUpload:", error);
-            setAnalysisError(`Failed to process video upload: ${error instanceof Error ? error.message : String(error)}`);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            setAnalysisError(`Failed to process video upload: ${errorMessage}`);
+            toast.error('Upload failed', {
+                description: errorMessage,
+            });
         }
     };
 
@@ -417,7 +439,7 @@ const AuthenticatedApp: React.FC = () => {
             };
 
             const generationCallbacks = {
-                onModelChange: (model: 'veo3' | 'sora2') => {
+                onModelChange: (model: 'wan2.2') => {
                     setGenerationModel(model);
                 },
                 onFrameRangeChange: (start: number, end: number) => {
@@ -482,15 +504,16 @@ const AuthenticatedApp: React.FC = () => {
                 <div className="h-9 w-9 rounded-full bg-background flex items-center justify-center">
                     <LogoIcon size={20} />
                 </div>
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-6">
+                    <ThemeToggle />
                     <span className="text-sm text-muted-foreground">
-                        Welcome, {user?.name}
+                        Welcome, {userProfile?.name || user?.email}
                     </span>
                     <button
-                        onClick={logout}
+                        onClick={() => setActiveView('profile')}
                         className="p-2 rounded-full hover:bg-accent"
-                        aria-label="User Menu"
-                        title="Click to logout"
+                        aria-label="User Profile"
+                        title="View Profile"
                     >
                         <UserIcon className="h-6 w-6" />
                     </button>
@@ -504,71 +527,84 @@ const AuthenticatedApp: React.FC = () => {
                     activeSessionId={currentSessionId}
                     onSelectSession={handleSelectSession}
                     onDeleteSession={handleDeleteSession}
+                    activeView={activeView}
+                    onSelectView={setActiveView}
                 />
 
-                <VideoChatArea
-                    jumpToTimestamp={jumpToTimestamp}
-                    seekTime={seekTime}
-                    onSeeked={handleSeeked}
-                    scenes={scenes}
-                    transcripts={transcripts}
-                    objects={objects}
-                    onTimeUpdate={handleVideoTimeUpdate}
-                    onVideoDurationChange={handleVideoDurationChange}
-                    videoSrc={videoSrc}
-                    generatedVideoSrc={generatedVideoSrc}
-                    onVideoUpload={handleVideoUpload}
-                    onAnalyze={handleAnalyze}
-                    isAnalyzing={isAnalyzing}
-                    messages={messages}
-                    onSendMessage={handleSendMessage}
-                    primaryVideoRef={primaryVideoRef}
-                    syncMode={syncMode}
-                    onSyncChange={handleSyncChange}
-                    onVideoGenerate={handleVideoGenerate}
-                    videoSettings={{
-                        playbackSpeed,
-                        trimStart,
-                        trimEnd,
-                        syncMode,
-                        frameMode,
-                        videoDuration
-                    }}
-                    generationSettings={{
-                        model: generationModel,
-                        frameRange: generationFrameRange,
-                        videoName: generationVideoName
-                    }}
-                    onPlaybackSpeedChange={setPlaybackSpeed}
-                    onTrimRangeChange={(start, end) => { setTrimStart(start); setTrimEnd(end); }}
-                    onSyncModeChange={setSyncMode}
-                    onFrameModeChange={setFrameMode}
-                    onGenerationModelChange={setGenerationModel}
-                    onGenerationFrameRangeChange={(start, end) => {
-                        const duration = (end - start) / 30;
-                        setGenerationFrameRange({ start, end, duration });
-                    }}
-                    onGenerationVideoNameChange={setGenerationVideoName}
-                />
+                {activeView === 'editor' ? (
+                    <>
+                        <VideoChatArea
+                            jumpToTimestamp={jumpToTimestamp}
+                            seekTime={seekTime}
+                            onSeeked={handleSeeked}
+                            scenes={scenes}
+                            transcripts={transcripts}
+                            objects={objects}
+                            onTimeUpdate={handleVideoTimeUpdate}
+                            onVideoDurationChange={handleVideoDurationChange}
+                            videoSrc={videoSrc}
+                            generatedVideoSrc={generatedVideoSrc}
+                            onVideoUpload={handleVideoUpload}
+                            onAnalyze={handleAnalyze}
+                            isAnalyzing={isAnalyzing}
+                            messages={messages}
+                            onSendMessage={handleSendMessage}
+                            primaryVideoRef={primaryVideoRef}
+                            syncMode={syncMode}
+                            onSyncChange={handleSyncChange}
+                            onVideoGenerate={handleVideoGenerate}
+                            videoSettings={{
+                                playbackSpeed,
+                                trimStart,
+                                trimEnd,
+                                syncMode,
+                                frameMode,
+                                videoDuration
+                            }}
+                            generationSettings={{
+                                model: generationModel,
+                                frameRange: generationFrameRange,
+                                videoName: generationVideoName
+                            }}
+                            onPlaybackSpeedChange={setPlaybackSpeed}
+                            onTrimRangeChange={(start, end) => { setTrimStart(start); setTrimEnd(end); }}
+                            onSyncModeChange={setSyncMode}
+                            onFrameModeChange={setFrameMode}
+                            onGenerationModelChange={setGenerationModel}
+                            onGenerationFrameRangeChange={(start, end) => {
+                                const duration = (end - start) / 30;
+                                setGenerationFrameRange({ start, end, duration });
+                            }}
+                            onGenerationVideoNameChange={setGenerationVideoName}
+                        />
 
-                <div
-                    onMouseDown={handleMouseDown}
-                    className="w-1.5 cursor-col-resize bg-border hover:bg-accent transition-colors flex-shrink-0"
-                    title="Resize panel"
-                />
+                        <div
+                            onMouseDown={handleMouseDown}
+                            className="w-1.5 cursor-col-resize bg-border hover:bg-accent transition-colors flex-shrink-0"
+                            title="Resize panel"
+                        />
 
-                <AnalysisPanel
-                    rightPanelWidth={rightPanelWidth}
-                    scenes={scenes}
-                    transcripts={transcripts}
-                    objects={objects}
-                    onTimestampClick={jumpToTimestamp}
-                    activeTimestamp={activeTimestamp}
-                    activeTab={activeAnalysisTab}
-                    onTabChange={setActiveAnalysisTab}
-                    isAnalyzing={isAnalyzing}
-                    error={analysisError}
-                />
+                        <AnalysisPanel
+                            rightPanelWidth={rightPanelWidth}
+                            scenes={scenes}
+                            transcripts={transcripts}
+                            objects={objects}
+                            onTimestampClick={jumpToTimestamp}
+                            activeTimestamp={activeTimestamp}
+                            activeTab={activeAnalysisTab}
+                            onTabChange={setActiveAnalysisTab}
+                            isAnalyzing={isAnalyzing}
+                            error={analysisError}
+                            playbackId={currentSession?.muxPlaybackId || null}
+                        />
+                    </>
+                ) : activeView === 'content' ? (
+                    <ContentLibrary />
+                ) : activeView === 'analytics' ? (
+                    <AnalyticsDashboard />
+                ) : (
+                    <UserProfilePage onBack={() => setActiveView('editor')} />
+                )}
             </div>
 
             {/* Video Name Dialog */}
@@ -585,23 +621,24 @@ const AuthenticatedApp: React.FC = () => {
 // App Wrapper with Authentication
 const App: React.FC = () => {
     return (
-        <AuthProvider>
-            <AppContent />
-        </AuthProvider>
+        <ThemeProvider>
+            <AuthProvider>
+                <AppContent />
+                <Toaster />
+            </AuthProvider>
+        </ThemeProvider>
     );
 };
 
 // App Content Component (handles auth state)
 const AppContent: React.FC = () => {
-    const { isAuthenticated, showLogin } = useAuth();
+    const { isAuthenticated, showLogin, hideLogin, isLoginVisible } = useAuth();
 
     if (!isAuthenticated) {
-        return (
-            <>
-                <LandingPage onLogin={showLogin} />
-                <LoginModal />
-            </>
-        );
+        if (isLoginVisible) {
+            return <AuthPage onBack={hideLogin} />;
+        }
+        return <LandingPage onLogin={showLogin} />;
     }
 
     return <AuthenticatedApp />;

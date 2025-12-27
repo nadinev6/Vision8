@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { cn, formatTime } from '../lib/utils';
 import { SearchIcon, XIcon, VideoIcon, MicIcon, TagIcon, RotateCwIcon } from './icons';
+import { generateThumbnailUrl, hasThumbnailSupport } from '../lib/thumbnail-utils';
 
 // --- TYPE DEFINITIONS ---
 export interface Scene {
@@ -22,12 +23,13 @@ interface AnalysisPanelProps {
     scenes: Scene[];
     transcripts: TranscriptItem[];
     objects: TrackedObject[];
-    onTimestampClick: (time: number) => void;
+    onTimestampClick: (time: number, typeHint?: string) => void;
     activeTimestamp: number | null;
     activeTab: string;
     onTabChange: (tab: string) => void;
     isAnalyzing: boolean;
     error: string | null;
+    playbackId?: string | null;
 }
 
 const TabButton: React.FC<{ active: boolean; onClick: () => void; children: React.ReactNode; className?: string }> = ({ active, onClick, children, className }) => (
@@ -43,7 +45,7 @@ const TabButton: React.FC<{ active: boolean; onClick: () => void; children: Reac
     </button>
 );
 
-const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ rightPanelWidth, scenes, transcripts, objects, onTimestampClick, activeTimestamp, activeTab, onTabChange, isAnalyzing, error }) => {
+const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ rightPanelWidth, scenes, transcripts, objects, onTimestampClick, activeTimestamp, activeTab, onTabChange, isAnalyzing, error, playbackId }) => {
     const [searchQuery, setSearchQuery] = useState('');
 
     const renderContent = () => {
@@ -81,18 +83,43 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ rightPanelWidth, scenes, 
         switch (activeTab) {
             case 'scene':
                 return (
-                    <div className="p-2 space-y-1">
+                    <div className={cn("p-2", playbackId ? "grid grid-cols-2 gap-2" : "space-y-1")}>
                         {scenes.map((scene, index) => {
                             const isActive = activeTimestamp === scene.timestamp;
+                            const thumbnailUrl = hasThumbnailSupport(playbackId)
+                                ? generateThumbnailUrl(playbackId, scene.timestamp, 'analysis')
+                                : null;
+
                             return (
-                                <button key={index} onClick={() => onTimestampClick(scene.timestamp, 'scene')} className={cn("w-full text-left p-2 rounded-md hover:bg-secondary transition-colors", isActive && "bg-primary/5 ring-1 ring-primary/30")}>
-                                    <p className="text-xs text-primary font-mono">{formatTime(scene.timestamp)}</p>
-                                    <p className="text-sm text-foreground">{scene.description}</p>
+                                <button
+                                    key={index}
+                                    onClick={() => onTimestampClick(scene.timestamp, 'scene')}
+                                    className={cn(
+                                        "w-full text-left rounded-md transition-all overflow-hidden group relative",
+                                        playbackId ? "aspect-video bg-muted border border-border hover:ring-2 hover:ring-primary/50" : "p-2 hover:bg-secondary",
+                                        isActive && (playbackId ? "ring-2 ring-primary" : "bg-primary/5 ring-1 ring-primary/30")
+                                    )}
+                                >
+                                    {thumbnailUrl ? (
+                                        <>
+                                            <img src={thumbnailUrl} alt={`Scene at ${formatTime(scene.timestamp)}`} className="w-full h-full object-cover" />
+                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
+                                                <span className="text-xs text-white bg-black/60 px-1 rounded">{formatTime(scene.timestamp)}</span>
+                                            </div>
+                                            {isActive && <div className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full shadow-lg" />}
+                                        </>
+                                    ) : (
+                                        <>
+                                            <p className="text-xs text-primary font-mono">{formatTime(scene.timestamp)}</p>
+                                            <p className="text-sm text-foreground">{scene.description}</p>
+                                        </>
+                                    )}
                                 </button>
                             );
                         })}
                     </div>
                 );
+
             case 'transcription':
                 return (
                     <div className="p-2 space-y-2">
@@ -121,26 +148,6 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ rightPanelWidth, scenes, 
                         })}
                     </div>
                 );
-            case 'analytics':
-                return (
-                    <div className="p-4 text-center">
-                        <div className="bg-muted/50 rounded-lg p-6 space-y-4">
-                            <div className="text-4xl font-bold text-primary">0</div>
-                            <div className="text-sm text-muted-foreground font-medium uppercase tracking-wide">Total Views</div>
-                        </div>
-                        <div className="mt-4 grid grid-cols-2 gap-4">
-                            <div className="bg-muted/50 rounded-lg p-4">
-                                <div className="text-2xl font-bold">0%</div>
-                                <div className="text-xs text-muted-foreground mt-1">Completion Rate</div>
-                            </div>
-                            <div className="bg-muted/50 rounded-lg p-4">
-                                <div className="text-2xl font-bold">0s</div>
-                                <div className="text-xs text-muted-foreground mt-1">Avg Watch Time</div>
-                            </div>
-                        </div>
-                        <p className="mt-8 text-xs text-muted-foreground">Mux Analytics Data (Demo)</p>
-                    </div>
-                );
             default:
                 return null;
         }
@@ -148,7 +155,15 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ rightPanelWidth, scenes, 
 
     return (
         <aside className="bg-card border-l border-border flex flex-col flex-shrink-0" style={{ width: `${rightPanelWidth}px` }}>
-            <div className="p-4 border-b border-border flex-shrink-0">
+            <div className="px-4 py-3 border-b border-border flex items-center justify-between flex-shrink-0 bg-muted/30">
+                <h2 className="font-semibold text-sm flex items-center">
+                    <VideoIcon className="w-4 h-4 mr-2 text-primary" />
+                    Video Analysis
+                </h2>
+                <div className="flex items-center space-x-1">
+                </div>
+            </div>
+            <div className="p-3 border-b border-border flex-shrink-0">
                 <div className="relative">
                     <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <input
@@ -170,7 +185,6 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ rightPanelWidth, scenes, 
                     <TabButton className="flex-1" active={activeTab === 'scene'} onClick={() => onTabChange('scene')}>Scenes</TabButton>
                     <TabButton className="flex-1" active={activeTab === 'transcription'} onClick={() => onTabChange('transcription')}>Transcript</TabButton>
                     <TabButton className="flex-1" active={activeTab === 'object'} onClick={() => onTabChange('object')}>Objects</TabButton>
-                    <TabButton className="flex-1" active={activeTab === 'analytics'} onClick={() => onTabChange('analytics')}>Analytics</TabButton>
                 </div>
             </div>
             <div className="flex-grow relative min-h-0">

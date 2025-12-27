@@ -6,7 +6,7 @@ import { Slider } from "./ui/slider";
 import {
   PlayIcon, PauseIcon, Volume2Icon, Volume1Icon, VolumeXIcon,
   Maximize2Icon, Minimize2Icon, RotateCwIcon, SettingsIcon,
-  SkipBackIcon, SkipForwardIcon, HashIcon, EyeOffIcon
+  SkipBackIcon, SkipForwardIcon, HashIcon, EyeOffIcon, DownloadIcon
 } from "./icons";
 import { cn, formatTime } from "../lib/utils";
 import VideoSettingsDialog from "./VideoSettingsDialog";
@@ -25,6 +25,7 @@ interface VideoPlayerProProps {
   activeSyncMode?: 'video' | 'none';
   onSceneTrim?: (startTime: number, endTime: number) => void;
   isGeneratedVideo?: boolean;
+  downloadUrl?: string | null;
 }
 
 interface FullscreenableElement extends HTMLDivElement {
@@ -45,7 +46,7 @@ interface FullscreenableDocument extends Document {
 const FRAME_RATE = 30; // Assuming 30 FPS
 const FRAME_STEP = 1 / FRAME_RATE;
 
-const VideoPlayerPro = React.forwardRef<HTMLVideoElement, VideoPlayerProProps>(({ src, title, seekToTime, onSeeked, onTimeUpdate, onDurationChange, syncMaster, forceMute, onSyncChange, activeSyncMode, onSceneTrim, isGeneratedVideo = false }, ref) => {
+const VideoPlayerPro = React.forwardRef<HTMLVideoElement, VideoPlayerProProps>(({ src, title, seekToTime, onSeeked, onTimeUpdate, onDurationChange, syncMaster, forceMute, onSyncChange, activeSyncMode, onSceneTrim, isGeneratedVideo = false, downloadUrl }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
 
@@ -77,7 +78,46 @@ const VideoPlayerPro = React.forwardRef<HTMLVideoElement, VideoPlayerProProps>((
   const [trimStart, setTrimStart] = useState<number>(0);
   const [trimEnd, setTrimEnd] = useState<number>(0);
   const [showFrameCount, setShowFrameCount] = useState<boolean>(true);
+  const [dragSelection, setDragSelection] = useState<{ start: number; end: number } | null>(null);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [dragStartX, setDragStartX] = useState<number>(0);
   const isSlave = !!syncMaster;
+
+  /**
+   * Handle drag-to-select region on timeline
+   * Allows users to select scenes by clicking and dragging on the timeline
+   */
+  const handleTimelineMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (isSlave || !duration) return;
+    
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const startPercent = (x / rect.width) * 100;
+    const startTime = (startPercent / 100) * duration;
+    
+    setIsDragging(true);
+    setDragStartX(x);
+    setDragSelection({ start: startTime, end: startTime });
+  }, [isSlave, duration]);
+
+  const handleTimelineMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDragging || !dragSelection || isSlave || !duration) return;
+    
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const endPercent = Math.max(0, Math.min(100, (x / rect.width) * 100));
+    const endTime = (endPercent / 100) * duration;
+    
+    setDragSelection({
+      start: Math.min(dragSelection.start, endTime),
+      end: Math.max(dragSelection.start, endTime),
+    });
+  }, [isDragging, dragSelection, isSlave, duration]);
+
+  const handleTimelineMouseUp = useCallback(() => {
+    setIsDragging(false);
+    // Keep selection for UI feedback
+  }, []);
 
   // Effects (Mostly Unchanged)
   useEffect(() => {
@@ -305,7 +345,7 @@ const VideoPlayerPro = React.forwardRef<HTMLVideoElement, VideoPlayerProProps>((
       />
       <div
         ref={containerRef}
-        className="relative w-full h-full bg-[oklch(0.15_0_0)] rounded-lg flex items-center justify-center overflow-hidden group"
+        className="relative w-full h-full bg-black rounded-lg flex items-center justify-center overflow-hidden group transition-all duration-300 dark:ring-1 dark:ring-white/5"
         onMouseEnter={() => setShowControls(true)}
         onMouseLeave={() => setShowControls(false)}
       >
@@ -349,7 +389,7 @@ const VideoPlayerPro = React.forwardRef<HTMLVideoElement, VideoPlayerProProps>((
             showControls && src ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
           )}
         >
-          {/* Progress Bar Container */}
+          {/* Progress Bar Container with Drag Selection */}
           <div className="relative z-10 px-4 pt-2">
             <div
               className={cn("relative w-full h-1 bg-primary-foreground/30 rounded-full group mb-2", isSlave ? "cursor-default" : "cursor-pointer")}
@@ -359,10 +399,51 @@ const VideoPlayerPro = React.forwardRef<HTMLVideoElement, VideoPlayerProProps>((
                 const x = e.clientX - rect.left;
                 handleSeek((x / rect.width) * 100);
               }}
+              onMouseDown={handleTimelineMouseDown}
+              onMouseMove={handleTimelineMouseMove}
+              onMouseUp={handleTimelineMouseUp}
+              onMouseLeave={handleTimelineMouseUp}
             >
               <div className="absolute top-0 left-0 h-full bg-white rounded-full" style={{ width: `${progress}%` }} />
+              
+              {/* Drag Selection Overlay */}
+              {dragSelection && dragSelection.end > dragSelection.start && (
+                <div
+                  className="absolute top-0 h-full bg-primary/40 rounded-full transition-all"
+                  style={{
+                    left: `${(dragSelection.start / duration) * 100}%`,
+                    width: `${((dragSelection.end - dragSelection.start) / duration) * 100}%`,
+                    pointerEvents: 'none'
+                  }}
+                />
+              )}
+              
               <div className={cn("absolute top-1/2 h-3 w-3 bg-white rounded-full transition-opacity", !isSlave && "opacity-0 group-hover:opacity-100")} style={{ left: `${progress}%`, transform: `translate(-50%, -50%)` }} />
             </div>
+            
+            {/* Selection Info Display */}
+            {dragSelection && dragSelection.end > dragSelection.start && (
+              <div className="flex items-center justify-between px-2 py-1 text-xs text-muted-foreground bg-muted/50 rounded-sm mt-1">
+                <span>Selection: {formatTime(dragSelection.start)} - {formatTime(dragSelection.end)}</span>
+                <button
+                  onClick={() => {
+                    setTrimStart(dragSelection.start);
+                    setTrimEnd(dragSelection.end);
+                    handleSceneTrim(dragSelection.start, dragSelection.end);
+                    setDragSelection(null);
+                  }}
+                  className="px-2 py-0.5 text-xs font-medium bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
+                >
+                  Apply Selection
+                </button>
+                <button
+                  onClick={() => setDragSelection(null)}
+                  className="px-2 py-0.5 text-xs font-medium bg-secondary text-secondary-foreground rounded hover:bg-secondary/80 transition-colors"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Controls - Clean Light Container */}
@@ -428,6 +509,28 @@ const VideoPlayerPro = React.forwardRef<HTMLVideoElement, VideoPlayerProProps>((
               >
                 {showFrameCount ? <HashIcon className="w-5 h-5" /> : <EyeOffIcon className="w-5 h-5" />}
               </Button>
+
+              {/* Download Button */}
+              {downloadUrl && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-white hover:bg-white/20"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // Create a temporary anchor to trigger download
+                    const a = document.createElement('a');
+                    a.href = downloadUrl;
+                    a.download = title ? `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.mp4` : 'video.mp4';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                  }}
+                  title="Download Video"
+                >
+                  <DownloadIcon className="w-5 h-5" />
+                </Button>
+              )}
 
               <Button
                 variant="ghost"

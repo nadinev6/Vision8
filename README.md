@@ -48,11 +48,22 @@ Vision8 combines a modern React frontend with a powerful Python backend:
 - **Storage**: Firebase for user data and video storage
 - **Database**: Supabase (cost-effective alternative to Elasticsearch)
 
+### 🔄 Comfy + MCP Workflow Strategy
+
+Vision8 leverages **ComfyUI** for advanced video processing pipelines combined with **Model Context Protocol (MCP)** for intelligent workload orchestration:
+
+- **ComfyUI Integration**: Modular node-based video processing workflows for frame extraction, analysis, and AI generation
+- **MCP Server**: Coordinates AI model calls, manages context windows, and optimizes inference requests
+- **Workflow Automation**: Seamless integration between frontend analysis requests and backend processing nodes
+- **Scalability**: Distributed processing of video frames across multiple ComfyUI instances
+
 ## 🛠️ Getting Started
 
 ### Prerequisites
 - Node.js 18+
 - Gemini API key
+- Python 3.8+ (for FastAPI backend)
+- ComfyUI (for video processing workflows)
 
 ### Quick Setup
 ```bash
@@ -65,10 +76,13 @@ npm install
 
 # Set up environment variables
 cp .env.local.template .env
-# Add your VITE_GEMINI_API_KEY
+# Add your VITE_GEMINI_API_KEY and COMFY_SERVER_URL
 
 # Start development server
 npm run dev
+
+# (Optional) Start ComfyUI server in parallel
+# cd backend && python -m comfy.main --listen 127.0.0.1 --port 8188
 ```
 
 ### Deploy

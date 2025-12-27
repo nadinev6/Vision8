@@ -1,0 +1,95 @@
+{
+    "1": {
+        "class_type": "VHS_LoadVideo",
+        "inputs": {
+            "video": "",
+            "force_rate": 24,
+            "force_size": "Disabled",
+            "custom_width": 1280,
+            "custom_height": 720
+        },
+        "_meta": {
+            "title": "SOURCE_VIDEO"
+        }
+    },
+    "2": {
+        "class_type": "IPAdapterLoadImage",
+        "inputs": {
+            "image": ""
+        },
+        "_meta": {
+            "title": "IP_ADAPTER_IMAGE"
+        }
+    },
+    "3": {
+        "class_type": "CLIPTextEncode",
+        "inputs": {
+            "text": "",
+            "clip": [
+                "8",
+                0
+            ]
+        },
+        "_meta": {
+            "title": "USER_PROMPT"
+        }
+    },
+    "4": {
+        "class_type": "SVDSampler",
+        "inputs": {
+            "seed": 42,
+            "fps": 24,
+            "motion_bucket_id": 127,
+            "cond_aug": 0.02,
+            "decode_chunk_size": 8,
+            "model": [
+                "9",
+                0
+            ],
+            "init_image": [
+                "1",
+                0
+            ],
+            "num_frames": 120
+        },
+        "_meta": {
+            "title": "SVD_SAMPLER"
+        }
+    },
+    "5": {
+        "class_type": "VHS_VideoCombine",
+        "inputs": {
+            "frame_rate": 24,
+            "loop_count": 0,
+            "filename_prefix": "hallucination_scene",
+            "format": "video/h264-mp4",
+            "pingpong": false,
+            "save_output": true,
+            "images": [
+                "4",
+                0
+            ]
+        },
+        "_meta": {
+            "title": "OUTPUT_NODE"
+        }
+    },
+    "8": {
+        "class_type": "CLIPLoader",
+        "inputs": {
+            "clip_name": "clip_l.safetensors"
+        },
+        "_meta": {
+            "title": "CLIP_LOADER"
+        }
+    },
+    "9": {
+        "class_type": "CheckpointLoaderSimple",
+        "inputs": {
+            "ckpt_name": "svd_xt_1_1.safetensors"
+        },
+        "_meta": {
+            "title": "SVD_CHECKPOINT"
+        }
+    }
+}

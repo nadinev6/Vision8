@@ -12,6 +12,7 @@ from datetime import datetime
 
 from api.video_generation_routes import router as generation_router
 from api.video_analysis_routes import router as analysis_router
+from api.image_generation_routes import router as image_router
 
 logger = structlog.get_logger()
 
@@ -21,6 +22,7 @@ router = APIRouter()
 # Include sub-routers
 router.include_router(generation_router, prefix="/video")
 router.include_router(analysis_router, prefix="/video")
+router.include_router(image_router, prefix="/api")
 
 # Root API endpoint
 @router.get("/")
@@ -65,22 +67,6 @@ async def api_health() -> Dict[str, Any]:
         }
 
 
-# Test endpoint for Elasticsearch connection - DISABLED
-@router.get("/test/elasticsearch")
-async def test_elasticsearch() -> Dict[str, Any]:
-    """Elasticsearch testing disabled - service removed to eliminate costs."""
-    return {
-        "status": "disabled",
-        "message": "Elasticsearch testing disabled to eliminate cloud costs",
-        "elasticsearch": {
-            "connected": False,
-            "cluster_name": "disabled",
-            "version": "N/A",
-            "index_name": "N/A",
-            "index_exists": False
-        },
-        "timestamp": datetime.utcnow().isoformat()
-    }
 
 
 # Test endpoint for embedding generation
@@ -288,13 +274,6 @@ async def test_integration() -> Dict[str, Any]:
             "error": str(e)
         }
     
-    # Elasticsearch testing disabled
-    results["services"]["elasticsearch"] = {
-        "status": "disabled",
-        "message": "Elasticsearch disabled to eliminate cloud costs",
-        "url": None,
-        "has_api_key": False
-    }
     
     # Overall status (excluding Elasticsearch)
     all_services = [results["services"].get(svc, {}).get("status") for svc in ["embeddings", "langcache"]]

@@ -1,7 +1,7 @@
 """
 Video Generation Service for Vision8 Backend
 
-This service handles AI-powered video generation using Veo-3 and other models.
+This service handles AI-powered video generation using Wan 2.2 and other models.
 It provides scene replacement, video stitching, and generation management.
 """
 
@@ -28,7 +28,7 @@ class VideoGenerationService:
         self.location = os.getenv('VEO_LOCATION', 'us-central1')
         
         # Generation settings
-        self.supported_models = ['veo3', 'sora2']
+        self.supported_models = ['wan2.2']
         self.quality_presets = {
             'draft': {'resolution': '480p', 'fps': 24, 'duration_limit': 30},
             'standard': {'resolution': '720p', 'fps': 30, 'duration_limit': 60},
@@ -40,7 +40,7 @@ class VideoGenerationService:
         video_id: str,
         scene_id: str,
         generation_prompt: str,
-        model: str = 'veo3',
+        model: str = 'wan2.2',
         quality: str = 'standard',
         duration_seconds: float = 5.0,
         reference_frame: Optional[str] = None,
@@ -54,7 +54,7 @@ class VideoGenerationService:
             video_id: Source video identifier
             scene_id: Scene to replace identifier
             generation_prompt: Text prompt for generation
-            model: AI model to use ('veo3' or 'sora2')
+            model: AI model to use ('wan2.2')
             quality: Quality preset ('draft', 'standard', 'high')
             duration_seconds: Duration of generated scene
             reference_frame: Base64 encoded reference frame (optional)
@@ -80,9 +80,9 @@ class VideoGenerationService:
             # Create generation job
             job_id = f"{video_id}_{scene_id}_{model}_{int(asyncio.get_event_loop().time())}"
             
-            # Prepare generation request based on model
-            if model == 'veo3':
-                result = await self._generate_with_veo3(
+            # Prepare generation request based on model (currently only Wan 2.2 is supported)
+            if model == 'wan2.2':
+                result = await self._generate_with_wan22(
                     job_id=job_id,
                     prompt=generation_prompt,
                     duration=duration_seconds,
@@ -90,15 +90,6 @@ class VideoGenerationService:
                     reference_frame=reference_frame,
                     style_settings=style_settings,
                     user_api_key=user_api_key
-                )
-            elif model == 'sora2':
-                result = await self._generate_with_sora2(
-                    job_id=job_id,
-                    prompt=generation_prompt,
-                    duration=duration_seconds,
-                    quality=quality,
-                    reference_frame=reference_frame,
-                    style_settings=style_settings
                 )
             else:
                 raise ValueError(f"Model {model} not implemented")
@@ -133,7 +124,7 @@ class VideoGenerationService:
             raise
     
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
-    async def _generate_with_veo3(
+    async def _generate_with_wan22(
         self,
         job_id: str,
         prompt: str,
@@ -143,7 +134,7 @@ class VideoGenerationService:
         style_settings: Optional[Dict] = None,
         user_api_key: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Generate video using Veo-3 model via Vertex AI."""
+        """Generate video using Wan 2.2 model."""
         
         try:
             # Use user-provided API key if available, otherwise try default authentication
@@ -262,26 +253,6 @@ class VideoGenerationService:
             logger.error("Failed to get Vertex AI token", error=str(e))
             return None
     
-    async def _generate_with_sora2(
-        self,
-        job_id: str,
-        prompt: str,
-        duration: float,
-        quality: str,
-        reference_frame: Optional[str] = None,
-        style_settings: Optional[Dict] = None
-    ) -> Dict[str, Any]:
-        """Generate video using Sora-2 model (placeholder implementation)."""
-        
-        logger.warning("Sora-2 integration not yet implemented, using mock response")
-        
-        # Mock Sora-2 response
-        return {
-            'status': 'completed',
-            'generation_url': f'https://mock-storage.com/sora2/{job_id}.mp4',
-            'estimated_completion': asyncio.get_event_loop().time() + 45
-        }
-    
     async def get_generation_status(self, job_id: str) -> Dict[str, Any]:
         """Get the status of a generation job."""
         try:
@@ -315,7 +286,7 @@ class VideoGenerationService:
                 {
                     'job_id': f'{video_id}_scene_001_veo3_123456',
                     'scene_id': 'scene_001',
-                    'model': 'veo3',
+                    'model': 'wan2.2',
                     'status': 'completed',
                     'created_at': asyncio.get_event_loop().time() - 3600,
                     'generation_url': f'https://mock-storage.com/generated/{video_id}_scene_001.mp4'
@@ -648,13 +619,63 @@ class VideoGenerationService:
             output_path = os.path.join(storage_dir, output_filename)
             
             # FFMPEG Concatenation
-            (
-                ffmpeg
-                .input(str(concat_list_path), format='concat', safe=0)
-                .output(output_path, c='copy') # Try copy first for speed
-                .overwrite_output()
-                .run(quiet=True)
-            )
+            # First, check if all segments have identical parameters for stream copy
+            can_copy = True
+            first_info = None
+            
+            try:
+                for path in local_paths:
+                    probe = ffmpeg.probe(str(path))
+                    v_stream = next((s for s in probe['streams'] if s['codec_type'] == 'video'), None)
+                    if not v_stream:
+                        can_copy = False
+                        break
+                    
+                    info = {
+                        'width': v_stream.get('width'),
+                        'height': v_stream.get('height'),
+                        'r_frame_rate': v_stream.get('r_frame_rate'),
+                        'pix_fmt': v_stream.get('pix_fmt')
+                    }
+                    
+                    if first_info is None:
+                        first_info = info
+                    elif info != first_info:
+                        logger.info("Segments differ, forcing re-encode for stability", 
+                                   diff_path=str(path), 
+                                   expected=first_info, 
+                                   actual=info)
+                        can_copy = False
+                        break
+            except Exception as probe_err:
+                logger.warning("Probe failed, assuming re-encode needed", error=str(probe_err))
+                can_copy = False
+
+            if can_copy:
+                logger.info("Using stream copy (Concat Demuxer) for speed")
+                (
+                    ffmpeg
+                    .input(str(concat_list_path), format='concat', safe=0)
+                    .output(output_path, c='copy')
+                    .overwrite_output()
+                    .run(quiet=True)
+                )
+            else:
+                logger.info("Segments incompatible for copy, re-encoding to high-quality H264")
+                (
+                    ffmpeg
+                    .input(str(concat_list_path), format='concat', safe=0)
+                    .output(
+                        output_path,
+                        vcodec='libx264',
+                        acodec='aac',
+                        crf=18,         # High quality
+                        preset='slow',  # Better compression
+                        pix_fmt='yuv420p' # Standard compatibility
+                    )
+                    .overwrite_output()
+                    .run(quiet=True)
+                )
             
             logger.info("Concatenation complete", output=output_path)
             

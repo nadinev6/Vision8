@@ -1,7 +1,14 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User, onAuthStateChanged } from 'firebase/auth';
-import { auth } from '../lib/firebase';
-import { signIn, signUp, logOut, getUserProfile, UserProfile } from '../lib/auth';
+import { User, Session } from '@supabase/supabase-js';
+import { supabase } from '../supabaseClient';
+
+// Define UserProfile interface (mimicking what was likely in lib/auth)
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  created_at?: string;
+}
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -14,6 +21,7 @@ interface AuthContextType {
   hideLogin: () => void;
   isLoginVisible: boolean;
   isLoading: boolean;
+  resetPassword: (email: string) => Promise<{ success: boolean; message: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -37,33 +45,54 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoginVisible, setIsLoginVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Listen to Firebase auth state changes
+  // Fetch user profile from Supabase 'users' table or metadata
+  const fetchUserProfile = async (userId: string, email?: string) => {
+    // For now, we'll construct a basic profile from the auth user
+    // In a real app, you might fetch from a 'profiles' table
+    setUserProfile({
+      id: userId,
+      name: email?.split('@')[0] || 'User', // Fallback name
+      email: email || '',
+    });
+  };
+
+  // Listen to Supabase auth state changes
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      setUser(firebaseUser);
-      setIsAuthenticated(!!firebaseUser);
-      
-      if (firebaseUser) {
-        // Load user profile from Firestore
-        try {
-          const profile = await getUserProfile(firebaseUser.uid);
-          setUserProfile(profile);
-        } catch (error) {
-          console.error('Error loading user profile:', error);
-        }
-      } else {
-        setUserProfile(null);
+    // Check active session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setIsAuthenticated(!!session?.user);
+      if (session?.user) {
+        fetchUserProfile(session.user.id, session.user.email);
       }
-      
       setIsLoading(false);
     });
 
-    return () => unsubscribe();
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      setIsAuthenticated(!!session?.user);
+      if (session?.user) {
+        fetchUserProfile(session.user.id, session.user.email);
+      } else {
+        setUserProfile(null);
+      }
+      setIsLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const login = async (credentials: { email: string; password: string }): Promise<boolean> => {
     try {
-      await signIn(credentials.email, credentials.password);
+      const { error } = await supabase.auth.signInWithPassword({
+        email: credentials.email,
+        password: credentials.password,
+      });
+
+      if (error) throw error;
+
       setIsLoginVisible(false);
       return true;
     } catch (error) {
@@ -74,7 +103,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const register = async (data: { name: string; email: string; password: string }): Promise<boolean> => {
     try {
-      await signUp(data.name, data.email, data.password);
+      const { error } = await supabase.auth.signUp({
+        email: data.email,
+        password: data.password,
+        options: {
+          data: {
+            name: data.name,
+          },
+        },
+      });
+
+      if (error) throw error;
+
       setIsLoginVisible(false);
       return true;
     } catch (error) {
@@ -85,7 +125,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async () => {
     try {
-      await logOut();
+      await supabase.auth.signOut();
     } catch (error) {
       console.error('Logout failed:', error);
     }
@@ -99,6 +139,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setIsLoginVisible(false);
   };
 
+  const resetPassword = async (email: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+
+      if (error) throw error;
+
+      return {
+        success: true,
+        message: 'Password reset email sent. Check your inbox.',
+      };
+    } catch (error: any) {
+      console.error('Password reset failed:', error);
+      return {
+        success: false,
+        message: error.message || 'Failed to send reset email.',
+      };
+    }
+  };
+
   const value: AuthContextType = {
     isAuthenticated,
     user,
@@ -109,7 +170,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     showLogin,
     hideLogin,
     isLoginVisible,
-    isLoading
+    isLoading,
+    resetPassword,
   };
 
   return (

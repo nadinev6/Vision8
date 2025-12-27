@@ -228,20 +228,14 @@ async def get_transcription_result(
     Returns the complete transcription with segments, timestamps, and metadata.
     
     - **job_id**: Unique job identifier
-    - **format**: Response format (json, elasticsearch)
     
     Returns complete transcription result with timing and confidence information.
     """
     try:
         result = await service.get_transcription_result(job_id)
         
-        if format.lower() == "elasticsearch":
-            # Return Elasticsearch-formatted document
-            es_doc = service.transcription_processor.format_for_elasticsearch(result)
-            return JSONResponse(content=es_doc)
-        else:
-            # Return standard JSON format
-            return JSONResponse(content=result.dict())
+        # Return standard JSON format
+        return JSONResponse(content=result.dict())
         
     except TranscriptionError as e:
         if e.error_code == "JOB_NOT_FOUND":

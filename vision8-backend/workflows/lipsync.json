@@ -1,0 +1,84 @@
+{
+    "1": {
+        "class_type": "VHS_LoadVideo",
+        "inputs": {
+            "video": "",
+            "force_rate": 24,
+            "force_size": "Disabled",
+            "custom_width": 1280,
+            "custom_height": 720
+        },
+        "_meta": {
+            "title": "SOURCE_VIDEO"
+        }
+    },
+    "2": {
+        "class_type": "VHS_LoadVideo",
+        "inputs": {
+            "video": "",
+            "force_rate": 24,
+            "force_size": "Disabled",
+            "custom_width": 1280,
+            "custom_height": 720
+        },
+        "_meta": {
+            "title": "LIP_REFERENCE"
+        }
+    },
+    "3": {
+        "class_type": "LipSyncModel",
+        "inputs": {
+            "model": "wav2lip_gan.pth",
+            "face_detection": "retinaface",
+            "padding": [
+                0,
+                10,
+                0,
+                0
+            ],
+            "resize_factor": 1
+        },
+        "_meta": {
+            "title": "LIPSYNC_MODEL"
+        }
+    },
+    "4": {
+        "class_type": "LipSyncApply",
+        "inputs": {
+            "source_video": [
+                "1",
+                0
+            ],
+            "reference_video": [
+                "2",
+                0
+            ],
+            "model": [
+                "3",
+                0
+            ],
+            "audio_source": "reference"
+        },
+        "_meta": {
+            "title": "LIPSYNC_APPLY"
+        }
+    },
+    "5": {
+        "class_type": "VHS_VideoCombine",
+        "inputs": {
+            "frame_rate": 24,
+            "loop_count": 0,
+            "filename_prefix": "lipsync_output",
+            "format": "video/h264-mp4",
+            "pingpong": false,
+            "save_output": true,
+            "images": [
+                "4",
+                0
+            ]
+        },
+        "_meta": {
+            "title": "OUTPUT_NODE"
+        }
+    }
+}

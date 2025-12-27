@@ -235,11 +235,11 @@ try:
     # Include the API router
     app.include_router(api_router)
     
-    logger.info("✅ Video analysis and generation routes loaded successfully")
+    logger.info("Video analysis and generation routes loaded successfully")
     
 except Exception as e:
-    logger.error(f"❌ Failed to load API routes: {str(e)}")
-    logger.warning("⚠️ Running without full API functionality")
+    logger.error(f"Failed to load API routes: {str(e)}")
+    logger.warning("Running without full API functionality")
     
     # Fallback: create minimal API structure
     from fastapi import APIRouter
@@ -267,11 +267,11 @@ async def root() -> Dict[str, str]:
     }
 
 if __name__ == "__main__":
-    print(f"🚀 Starting Vision8 Backend Server...")
-    print(f"📍 Host: {settings.API_HOST}")
-    print(f"🔌 Port: {settings.API_PORT}")
-    print(f"🐛 Debug: {settings.API_DEBUG_MODE}")
-    print(f"🌐 API Docs: http://{settings.API_HOST}:{settings.API_PORT}/docs")
+    print("Starting Vision8 Backend Server...")
+    print(f"Host: {settings.API_HOST}")
+    print(f"Port: {settings.API_PORT}")
+    print(f"Debug: {settings.API_DEBUG_MODE}")
+    print(f"API Docs: http://{settings.API_HOST}:{settings.API_PORT}/docs")
     
     if settings.API_DEBUG_MODE:
         uvicorn.run(

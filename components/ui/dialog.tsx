@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { cn } from '../../lib/utils';
 import { XIcon } from '../icons';
+import { useTheme } from '../../contexts/ThemeContext';
 
 interface DialogProps {
   open: boolean;
@@ -45,6 +46,9 @@ interface DialogContentProps {
 }
 
 export const DialogContent: React.FC<DialogContentProps> = ({ children, className, title, onClose }) => {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  
   return (
     <div 
       className={cn(
@@ -53,18 +57,18 @@ export const DialogContent: React.FC<DialogContentProps> = ({ children, classNam
         className
       )}
       style={{
-        background: 'rgba(255, 255, 255, 0.75)',
+        background: isDark ? 'rgba(0, 0, 0, 0.95)' : 'rgba(255, 255, 255, 0.75)',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
-        border: '1px solid rgba(255, 255, 255, 0.4)',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15)'
+        border: isDark ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(255, 255, 255, 0.4)',
+        boxShadow: isDark ? '0 8px 32px rgba(0, 0, 0, 0.8)' : '0 8px 32px rgba(0, 0, 0, 0.15)'
       }}
     >
       {title && (
         <div 
           className="flex items-center justify-between px-6 py-4"
           style={{
-            borderBottom: '1px solid rgba(0, 0, 0, 0.08)'
+            borderBottom: isDark ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(0, 0, 0, 0.08)'
           }}
         >
           <h2 className="text-lg font-semibold text-foreground">{title}</h2>

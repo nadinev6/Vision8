@@ -14,7 +14,7 @@ The Vision8 Backend is a robust application designed for intelligent video proce
 - FFmpeg-based video manipulation
 
 ### AI-Powered Video Generation
-- **Scene Regeneration**: Replace specific video segments with AI-generated content using Veo3 API
+- **Scene Regeneration**: Replace specific video segments with AI-generated content using Wan 2.2 API
 - **Multi-Stage Generation Pipeline**:
   - Video analysis and metadata extraction
   - Scene boundary detection and extraction
@@ -41,13 +41,13 @@ The video generation system follows a multi-stage approach:
 
 1. **Analysis Stage**: Examines source video metadata, identifies scene boundaries, and analyzes temporal context
 2. **Extraction Stage**: Extracts the target scene segment using FFmpeg with frame-accurate precision
-3. **Generation Stage**: Utilizes Veo3 API to generate new content based on user prompts and source material
+3. **Generation Stage**: Utilizes Wan 2.2 API to generate new content based on user prompts and source material
 4. **Stitching Stage**: Seamlessly combines pre-segment, generated scene, and post-segment into final output
 
 ### Key Components
 - **VideoGenerationManager**: Orchestrates the entire generation workflow
 - **FFmpegWrapper**: Handles video manipulation, extraction, and concatenation
-- **Veo3 API Integration**: Provides AI-powered scene generation capabilities
+- **Wan 2.2 API Integration**: Provides AI-powered scene generation capabilities
 - **Metadata Generator**: Extracts and structures video metadata using Gemini API
 - **Elasticsearch Service**: Enables efficient video search and retrieval
 
@@ -69,7 +69,7 @@ The video generation system follows a multi-stage approach:
 - Copy `.env.example` to `.env` and update the environment variables as needed.
 - Required environment variables:
   - `GEMINI_API_KEY`: For AI-powered metadata generation
-  - `VEO_API_KEY`: For video generation capabilities (if applicable)
+  - `WAN_API_KEY`: For video generation capabilities using Wan 2.2 (if applicable)
   - `ELASTICSEARCH_URL`: Elasticsearch instance URL
   - Additional configuration in `src/core/config.py`
 

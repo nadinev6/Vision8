@@ -1,0 +1,148 @@
+{
+    "1": {
+        "class_type": "VHS_LoadVideo",
+        "inputs": {
+            "video": "",
+            "force_rate": 24,
+            "force_size": "Disabled",
+            "custom_width": 1280,
+            "custom_height": 720
+        },
+        "_meta": {
+            "title": "SOURCE_VIDEO"
+        }
+    },
+    "2": {
+        "class_type": "IPAdapterLoadImage",
+        "inputs": {
+            "image": ""
+        },
+        "_meta": {
+            "title": "IP_ADAPTER_IMAGE"
+        }
+    },
+    "3": {
+        "class_type": "CLIPTextEncode",
+        "inputs": {
+            "text": "",
+            "clip": [
+                "10",
+                0
+            ]
+        },
+        "_meta": {
+            "title": "USER_PROMPT"
+        }
+    },
+    "4": {
+        "class_type": "Wan22Sampler",
+        "inputs": {
+            "seed": 42,
+            "steps": 35,
+            "cfg": 7.5,
+            "denoise": 1.0,
+            "model": [
+                "10",
+                0
+            ],
+            "positive": [
+                "3",
+                0
+            ],
+            "negative": [
+                "5",
+                0
+            ],
+            "latent_image": [
+                "6",
+                0
+            ]
+        },
+        "_meta": {
+            "title": "WAN_SAMPLER"
+        }
+    },
+    "5": {
+        "class_type": "CLIPTextEncode",
+        "inputs": {
+            "text": "blurry, low quality, distorted, watermark, text",
+            "clip": [
+                "10",
+                0
+            ]
+        },
+        "_meta": {
+            "title": "NEGATIVE_PROMPT"
+        }
+    },
+    "6": {
+        "class_type": "EmptyLatentVideo",
+        "inputs": {
+            "width": 1920,
+            "height": 1080,
+            "length": 120,
+            "batch_size": 1
+        },
+        "_meta": {
+            "title": "LATENT_VIDEO"
+        }
+    },
+    "7": {
+        "class_type": "IPAdapter",
+        "inputs": {
+            "weight": 0.85,
+            "noise": 0.0,
+            "model": [
+                "10",
+                0
+            ],
+            "ipadapter": [
+                "8",
+                0
+            ],
+            "image": [
+                "2",
+                0
+            ]
+        },
+        "_meta": {
+            "title": "ENVIRONMENT_LOCK"
+        }
+    },
+    "8": {
+        "class_type": "IPAdapterModelLoader",
+        "inputs": {
+            "ipadapter_file": "ip-adapter-plus_sd15.bin"
+        },
+        "_meta": {
+            "title": "IP_ADAPTER_LOADER"
+        }
+    },
+    "9": {
+        "class_type": "VHS_VideoCombine",
+        "inputs": {
+            "frame_rate": 24,
+            "loop_count": 0,
+            "filename_prefix": "hero_scene",
+            "format": "video/h264-mp4",
+            "pingpong": false,
+            "save_output": true,
+            "images": [
+                "4",
+                0
+            ]
+        },
+        "_meta": {
+            "title": "OUTPUT_NODE"
+        }
+    },
+    "10": {
+        "class_type": "CheckpointLoaderSimple",
+        "inputs": {
+            "ckpt_name": "wan22_video.safetensors"
+        },
+        "_meta": {
+            "title": "WAN_CHECKPOINT"
+        }
+    }
+}

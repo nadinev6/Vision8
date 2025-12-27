@@ -258,3 +258,45 @@ class SupabaseService:
     def is_available(self) -> bool:
         """Check if Supabase service is available"""
         return self.client is not None
+
+    async def create_video_record(self, video_data: Dict[str, Any]) -> str:
+        """Create a new video record"""
+        if not self.client: return None
+        try:
+            response = self.client.table('videos').insert(video_data).execute()
+            return response.data[0]['id'] if response.data else None
+        except Exception as e:
+            logger.error("Failed to create video record", error=str(e))
+            return None
+
+    async def update_video_by_upload_id(self, upload_id: str, updates: Dict[str, Any]) -> bool:
+        """Update video record by upload_id (used during upload processing)"""
+        if not self.client: return False
+        try:
+            self.client.table('videos').update(updates).eq('upload_id', upload_id).execute()
+            logger.info("Updated video by upload_id", upload_id=upload_id)
+            return True
+        except Exception as e:
+            logger.error("Failed to update video by upload_id", upload_id=upload_id, error=str(e))
+            return False
+
+    async def update_video_by_asset_id(self, asset_id: str, updates: Dict[str, Any]) -> bool:
+        """Update video record by mux_asset_id"""
+        if not self.client: return False
+        try:
+            self.client.table('videos').update(updates).eq('mux_asset_id', asset_id).execute()
+            logger.info("Updated video by asset_id", asset_id=asset_id)
+            return True
+        except Exception as e:
+            logger.error("Failed to update video by asset_id", asset_id=asset_id, error=str(e))
+            return False
+
+    async def get_video(self, video_id: str) -> Optional[Dict[str, Any]]:
+        """Get video record by ID"""
+        if not self.client: return None
+        try:
+            response = self.client.table('videos').select('*').eq('id', video_id).execute()
+            return response.data[0] if response.data else None
+        except Exception as e:
+            logger.error("Failed to get video", video_id=video_id, error=str(e))
+            return None

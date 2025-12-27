@@ -2,7 +2,7 @@
 Video Generation API Routes for Vision8 Backend
 
 Provides endpoints for AI-powered video generation, scene replacement,
-and generation management using Veo-3 and other models.
+and generation management using Wan 2.2 and other models.
 """
 
 import asyncio
@@ -31,7 +31,7 @@ class GenerationRequest(BaseModel):
     video_id: str = Field(..., description="Source video identifier")
     scene_id: str = Field(..., description="Scene to replace identifier")
     prompt: str = Field(..., description="Conversational modification instructions", max_length=2000)
-    model: str = Field(default="veo3", description="AI model to use")
+    model: str = Field(default="wan2.2", description="AI model to use")
     quality: str = Field(default="standard", description="Quality preset")
     duration_seconds: float = Field(default=5.0, ge=1.0, le=30.0, description="Duration in seconds")
     reference_frame: Optional[str] = Field(None, description="Base64 encoded reference frame")
