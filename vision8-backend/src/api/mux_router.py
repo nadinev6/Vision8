@@ -1,17 +1,29 @@
-
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 import os 
-from ..services.mux_service import MuxService
-from ..services.comfy_mcp_service import comfy_service
-from ..services.supabase_service import SupabaseService
 
-router = APIRouter(prefix="/api/mux", tags=["mux"])
+# Try to import services with fallback for missing dependencies
+try:
+    from services.mux_service import MuxService
+except ImportError:
+    MuxService = None
+    
+try:
+    from services.comfy_mcp_service import comfy_service
+except ImportError:
+    comfy_service = None
+    
+try:
+    from services.supabase_service import SupabaseService
+except ImportError:
+    SupabaseService = None
 
-# Initialize services (assuming env vars are loaded)
-mux_service = MuxService()
-supabase_service = SupabaseService()
+router = APIRouter(prefix="/mux", tags=["mux"])
+
+# Initialize services with error handling
+mux_service = MuxService() if MuxService else None
+supabase_service = SupabaseService() if SupabaseService else None
 
 class SceneReplacementRequest(BaseModel):
     asset_id: str
@@ -24,6 +36,8 @@ class SceneReplacementRequest(BaseModel):
 async def get_upload_url():
     """Get direct upload URL for browser uploads"""
     try:
+        if not mux_service:
+            raise HTTPException(status_code=503, detail="Mux service not available")
         return await mux_service.create_upload_url()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -32,7 +46,9 @@ async def get_upload_url():
 async def list_assets():
     """List recent assets"""
     try:
-         return await mux_service.list_assets()
+        if not mux_service:
+            raise HTTPException(status_code=503, detail="Mux service not available")
+        return await mux_service.list_assets()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -40,15 +56,22 @@ async def list_assets():
 async def get_global_analytics(timeframe: Optional[str] = "7:days"):
     """Get global analytics data from Mux (Data API)"""
     try:
+        if not mux_service:
+            # Return mock data if service not available
+            return {
+                "total_watch_time": {"value": 0, "formatted": "0s"},
+                "unique_viewers": {"value": 0},
+                "period": timeframe,
+                "status": "service_unavailable"
+            }
         data = await mux_service.get_real_analytics([timeframe])
         if not data:
-             # Return structure with 0 values if API fails or yields nothing
-             return {
-                 "total_watch_time": {"value": 0, "formatted": "0s"},
-                 "unique_viewers": {"value": 0},
-                 "period": timeframe,
-                 "status": "mock_or_empty"
-             }
+            return {
+                "total_watch_time": {"value": 0, "formatted": "0s"},
+                "unique_viewers": {"value": 0},
+                "period": timeframe,
+                "status": "mock_or_empty"
+            }
         return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -58,30 +81,30 @@ async def replace_scene(request: SceneReplacementRequest):
     """Replace a scene with AI-generated content"""
     try:
         if request.option == "remove":
-            # Logic to create a new asset by splicing clips
-            # For MVP, maybe just return success mock
             return {"status": "processing", "message": "Scene removal started"}
         
         elif request.option in ["budget", "premium"]:
             if not request.prompt:
                 raise HTTPException(status_code=400, detail="Prompt required for generation")
             
-            # Trigger ComfyUI generation
+            # Trigger ComfyUI generation if available
             workflow_map = {
-                "budget": "hallucination_scene", # Equivalent to SVD
-                "premium": "hero_scene",       # Pro-Realism Hero
-                "wan2.2": "hero_scene"          # Wan 2.2 generation
+                "budget": "hallucination_scene",
+                "premium": "hero_scene",
+                "wan2.2": "hero_scene"
             }
             
             workflow_name = workflow_map.get(request.option, "hallucination_scene")
             
-            # Execute workflow
-            # In a real flow, you might chain these. For now, we trigger the one requested.
-            # If "premium" is requested, we run hero_scene. 
-            # Note: sequential chaining (hero -> lipsync) is handled by the agent orchestrator (gemini.ts)
+            if not comfy_service:
+                return {
+                    "status": "error", 
+                    "message": "ComfyUI service not available for generation"
+                }
+                
             result_url = await comfy_service.run_workflow(workflow_name, {
                 "USER_PROMPT": request.prompt,
-                "SOURCE_VIDEO": None # Placeholder, would come from actual asset
+                "SOURCE_VIDEO": None
             })
                 
             return {
@@ -105,6 +128,10 @@ async def mux_webhook(request: Request):
         data = body.get("data", {})
         
         print(f"Received Mux Webhook: {type}")
+
+        if not supabase_service:
+            print("Supabase service not available for webhook processing")
+            return {"status": "service_unavailable"}
 
         if type == "video.upload.asset_created":
             upload_id = data.get("upload_id")

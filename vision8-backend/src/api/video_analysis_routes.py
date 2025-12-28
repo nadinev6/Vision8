@@ -11,11 +11,12 @@ import structlog
 import asyncio
 import json
 import os
+import uuid
 from datetime import datetime
 
 from services.supabase_service import SupabaseService
 from services.metadata_generator import MetadataGenerator
-from services.audio import AudioTranscriptionService
+from services.audio.audio_transcription_service import AudioTranscriptionService
 
 logger = structlog.get_logger()
 
@@ -64,6 +65,7 @@ def initialize_services():
 async def analyze_video(
     file: UploadFile = File(...),
     video_id: Optional[str] = Form(None),
+    video_name: Optional[str] = Form(None),
     include_transcription: bool = Form(False),
     language: str = Form("en-US")
 ) -> Dict[str, Any]:
@@ -74,7 +76,8 @@ async def analyze_video(
     
     Args:
         file: The video file to analyze
-        video_id: Optional custom video ID
+        video_id: Optional custom video ID (if provided, should be a UUID)
+        video_name: Optional user-entered name for the video/thread
         include_transcription: Whether to include accurate audio transcription
         language: Language code for transcription (e.g., en-US, es-ES)
         
@@ -92,9 +95,38 @@ async def analyze_video(
         )
     
     try:
-        # Generate video ID if not provided
-        if not video_id:
-            video_id = f"video_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        # Generate proper UUID for database, preserve user name as thread name
+        if not video_id or video_id == "Prose":  # Handle the "Prose" case and empty video_id
+            # Generate a proper UUID for the database
+            db_video_id = str(uuid.uuid4())
+            # Use user-provided name as thread name, fallback to filename
+            thread_name = video_name or file.filename or f"video_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            logger.info("Generated UUID for video_id", 
+                       original_video_id=video_id, 
+                       db_video_id=db_video_id, 
+                       thread_name=thread_name)
+        else:
+            # If video_id is provided and not "Prose", validate and use it
+            try:
+                # Validate it's a proper UUID
+                uuid.UUID(video_id)
+                db_video_id = video_id
+                thread_name = video_name or video_id
+                logger.info("Using provided UUID", video_id=video_id, thread_name=thread_name)
+            except (ValueError, TypeError):
+                # If not a valid UUID, generate one and use provided as thread name
+                db_video_id = str(uuid.uuid4())
+                thread_name = video_name or video_id
+                logger.info("Generated UUID for invalid video_id", 
+                           original_video_id=video_id, 
+                           db_video_id=db_video_id, 
+                           thread_name=thread_name)
+            else:
+                # Valid UUID provided
+                thread_name = video_name or video_id
+        
+        # Use the UUID as the video_id for database operations
+        video_id = db_video_id
         
         logger.info("video_analysis_started", 
                    video_id=video_id, 
@@ -326,6 +358,7 @@ async def analyze_video(
         response = {
             "status": "success",
             "video_id": video_id,
+            "thread_name": thread_name,
             "analysis": {
                 "scenes_analyzed": len(metadata_result.get("scenes", [])),
                 "total_duration_ms": metadata_result.get("duration_ms", 0),
@@ -499,13 +532,13 @@ async def delete_video_data(video_id: str) -> Dict[str, Any]:
 @router.get("/video/{video_id}")
 async def get_video_details(video_id: str) -> Dict[str, Any]:
     """
-    Get details for a specific video including Mux playback ID.
+    Get details for a specific video including scenes and metadata.
     
     Args:
         video_id: The video ID
         
     Returns:
-        Video details
+        Video details with scenes
     """
     initialize_services()
     
@@ -513,14 +546,55 @@ async def get_video_details(video_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=503, detail="Supabase not available")
         
     try:
-        video = await supabase_service.get_video(video_id)
-        if not video:
-            raise HTTPException(status_code=404, detail="Video not found")
-            
+        # Get all scenes for this video
+        scenes = await supabase_service.get_video_scenes(video_id)
+        
+        if not scenes:
+            # Check if the video exists in the videos table (for uploaded videos)
+            video = await supabase_service.get_video(video_id)
+            if video:
+                return {
+                    "status": "success",
+                    "video": video,
+                    "scenes": []
+                }
+            else:
+                raise HTTPException(status_code=404, detail="Video not found")
+        
+        # Aggregate scene data to create video info
+        total_scenes = len(scenes)
+        total_duration = max(scene.get('end_time_ms', 0) for scene in scenes) if scenes else 0
+        
+        # Collect all objects and actions
+        all_objects = []
+        all_actions = []
+        transcripts = []
+        
+        for scene in scenes:
+            if scene.get('objects_tracked'):
+                all_objects.extend(scene['objects_tracked'])
+            if scene.get('actions_detected'):
+                all_actions.extend(scene['actions_detected'])
+            if scene.get('accurate_transcript'):
+                transcripts.append(scene['accurate_transcript'])
+        
+        # Create aggregated video info from scenes
+        video_info = {
+            "video_id": video_id,
+            "scenes_count": total_scenes,
+            "total_duration_ms": total_duration,
+            "objects_detected": len(set(all_objects)),  # Unique objects
+            "actions_detected": list(set(all_actions)),  # Unique actions
+            "has_transcript": len(transcripts) > 0,
+            "scenes": scenes,
+            "analysis_timestamp": datetime.utcnow().isoformat()
+        }
+        
         return {
             "status": "success",
-            "video": video
+            "video": video_info
         }
+        
     except HTTPException:
         raise
     except Exception as e:

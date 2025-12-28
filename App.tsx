@@ -348,6 +348,8 @@ const AuthenticatedApp: React.FC = () => {
 
         try {
             const result = await analyzeVideo(videoFile, videoName);
+            console.log("📹 Analysis complete, updating session with result:", result);
+            
             const summaryText = `I've finished analyzing the video. I identified ${result.scenes.length} distinct scenes, ${result.transcripts.length} transcript entries, and found ${result.objects.length} unique objects. You can now explore the details in the panel on the right or ask me specific questions about the content.`;
             const assistantMessage: AssistantMessage = {
                 id: `assistant-${Date.now()}`,
@@ -355,7 +357,13 @@ const AuthenticatedApp: React.FC = () => {
                 content: { text: summaryText }
             };
 
-            setHistory(prev => prev.map(s => s.id === currentSessionId ? { ...s, ...result, messages: [...s.messages.filter(m => m.id !== reasoningId), assistantMessage] } : s));
+            setHistory(prev => prev.map(s => s.id === currentSessionId ? {
+                ...s, 
+                ...result, // This includes scenes, transcripts, objects, videoId, muxPlaybackId
+                messages: [...s.messages.filter(m => m.id !== reasoningId), assistantMessage]
+            } : s));
+            
+            console.log("✅ Session updated with analysis results and videoId:", result.videoId);
         } catch (error: any) {
             console.error("Video analysis failed:", error);
             const errorMessage = error.message || "Failed to analyze video.";

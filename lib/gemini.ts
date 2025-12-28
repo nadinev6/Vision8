@@ -227,7 +227,10 @@ async function analyzeVideoWithBackend(videoFile: File, customVideoId?: string):
 
     if (result.status === 'success') {
       // Convert backend format to frontend format
-      return await convertBackendResultToFrontend(result.video_id);
+      console.log("📊 Converting backend result with video_id:", result.video_id, "thread_name:", result.thread_name);
+      const frontendResult = await convertBackendResultToFrontend(result.video_id, result.thread_name);
+      console.log("✅ Frontend conversion complete:", frontendResult);
+      return frontendResult;
     } else {
       throw new Error(`Backend analysis failed: ${result.error || 'Unknown error'}`);
     }
@@ -243,11 +246,23 @@ async function getVideoDetails(videoId: string): Promise<{ mux_playback_id?: str
   try {
     const backendUrl = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
     const response = await fetch(`${backendUrl}/analysis/video/${videoId}`);
-    if (!response.ok) return null;
+    
+    // If the endpoint returns 404, it's likely because this video doesn't have Mux details
+    // This is normal behavior and we should return null without logging an error
+    if (response.status === 404) {
+      console.log("Video details not found (no Mux playback ID) - this is normal for analyzed videos");
+      return null;
+    }
+    
+    if (!response.ok) {
+      console.warn(`Video details request failed with status ${response.status}`);
+      return null;
+    }
+    
     const data = await response.json();
     return data.video;
   } catch (e) {
-    console.error("Failed to get video details", e);
+    console.warn("Failed to get video details (this is normal for analyzed videos without Mux integration)", e);
     return null;
   }
 }
@@ -255,11 +270,16 @@ async function getVideoDetails(videoId: string): Promise<{ mux_playback_id?: str
 /**
  * Convert backend analysis result to frontend format using the search API
  */
-async function convertBackendResultToFrontend(videoId: string): Promise<{ scenes: any[], transcripts: any[], objects: any[], videoId: string, muxPlaybackId?: string }> {
+async function convertBackendResultToFrontend(videoId: string, threadName?: string): Promise<{ scenes: any[], transcripts: any[], objects: any[], videoId: string, muxPlaybackId?: string, threadName?: string }> {
   try {
+    console.log("🔍 Searching for scenes with video_id:", videoId, "thread_name:", threadName);
+    
     // Search for all scenes from this video using the backend search
     const backendUrl = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
-    const response = await fetch(`${backendUrl}/video/search?query=*&video_id=${videoId}&max_results=50`);
+    const searchUrl = `${backendUrl}/analysis/search?query=${encodeURIComponent('*')}&video_id=${encodeURIComponent(videoId)}&max_results=50`;
+    console.log("🔗 Search URL:", searchUrl);
+    
+    const response = await fetch(searchUrl);
 
     if (!response.ok) {
       throw new Error(`Failed to fetch scenes for video: ${response.statusText}`);
@@ -267,6 +287,7 @@ async function convertBackendResultToFrontend(videoId: string): Promise<{ scenes
 
     const searchData = await response.json();
     const searchResults = searchData.results || [];
+    console.log("📊 Search results found:", searchResults.length, "scenes");
 
     const scenes: any[] = [];
     const transcripts: any[] = [];
@@ -275,18 +296,21 @@ async function convertBackendResultToFrontend(videoId: string): Promise<{ scenes
     for (const doc of searchResults) {
       // Add scene
       scenes.push({
-        timestamp: doc.time_ms / 1000,
-        description: doc.summary || doc.description
+        timestamp: (doc.start_time_ms || doc.time_ms || 0) / 1000,
+        description: doc.scene_summary || doc.summary || doc.description || doc.full_description
       });
 
       // Add transcripts
-      if (doc.transcript) {
-        for (const phrase of doc.transcript) {
-          transcripts.push({
-            startTime: phrase.start_ms / 1000,
-            endTime: phrase.end_ms / 1000,
-            text: phrase.text
-          });
+      if (doc.transcript || doc.accurate_transcript) {
+        const transcriptData = doc.accurate_transcript || doc.transcript;
+        if (transcriptData.segments) {
+          for (const phrase of transcriptData.segments) {
+            transcripts.push({
+              startTime: (phrase.start_ms || phrase.start_time_ms || 0) / 1000,
+              endTime: (phrase.end_ms || phrase.end_time_ms || 0) / 1000,
+              text: phrase.text
+            });
+          }
         }
       }
 
@@ -294,8 +318,8 @@ async function convertBackendResultToFrontend(videoId: string): Promise<{ scenes
       if (doc.objects) {
         for (const obj of doc.objects) {
           objects.push({
-            timestamp: doc.time_ms / 1000,
-            name: obj.label || obj.name
+            timestamp: (doc.start_time_ms || doc.time_ms || 0) / 1000,
+            name: obj.label || obj.name || obj
           });
         }
       }
@@ -304,22 +328,29 @@ async function convertBackendResultToFrontend(videoId: string): Promise<{ scenes
     console.log("✅ Converted backend result:", {
       scenes: scenes.length,
       transcripts: transcripts.length,
-      objects: objects.length
+      objects: objects.length,
+      videoId,
+      threadName
     });
 
-    // Fetch video details to get muxPlaybackId
+    // Fetch video details to get muxPlaybackId (use the UUID, not the thread name)
     let muxPlaybackId: string | undefined;
     try {
-      const videoDetails = await getVideoDetails(videoId);
+      console.log("🔍 Fetching video details for UUID:", videoId);
+      const videoDetails = await getVideoDetails(videoId); // Use UUID here
       if (videoDetails?.mux_playback_id) {
         muxPlaybackId = videoDetails.mux_playback_id;
         console.log("✅ Found Mux Playback ID:", muxPlaybackId);
+      } else {
+        console.log("ℹ️ No Mux Playback ID found (this is normal for analyzed videos)");
       }
     } catch (e) {
-      console.warn("Could not fetch video details", e);
+      console.warn("Could not fetch video details (this is normal if no Mux playback ID exists)", e);
     }
 
-    return { scenes, transcripts, objects, videoId, muxPlaybackId };
+    const result = { scenes, transcripts, objects, videoId, muxPlaybackId, threadName };
+    console.log("🎯 Final frontend result:", result);
+    return result;
 
   } catch (error) {
     console.error("❌ Failed to convert backend result:", error);
@@ -1236,4 +1267,11 @@ Full control through conversation:
   });
 
   return finalResponse.text;
+}
+
+// Helper function to format time
+function formatTime(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
 }

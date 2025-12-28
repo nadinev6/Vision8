@@ -292,11 +292,34 @@ class SupabaseService:
             return False
 
     async def get_video(self, video_id: str) -> Optional[Dict[str, Any]]:
-        """Get video record by ID"""
+        """Get video record by ID - handles both UUID and string IDs"""
         if not self.client: return None
         try:
-            response = self.client.table('videos').select('*').eq('id', video_id).execute()
-            return response.data[0] if response.data else None
+            # First try to find by UUID (if it looks like a UUID)
+            import uuid
+            try:
+                uuid.UUID(video_id)  # Test if it's a valid UUID
+                response = self.client.table('videos').select('*').eq('id', video_id).execute()
+                if response.data:
+                    return response.data[0]
+            except (ValueError, TypeError):
+                # Not a UUID, continue to other methods
+                pass
+            
+            # Try to find by mux_asset_id (common for uploaded videos)
+            response = self.client.table('videos').select('*').eq('mux_asset_id', video_id).execute()
+            if response.data:
+                return response.data[0]
+            
+            # Try to find by upload_id (for videos in upload process)
+            response = self.client.table('videos').select('*').eq('upload_id', video_id).execute()
+            if response.data:
+                return response.data[0]
+            
+            # If no video record found, return None (this is normal for test videos)
+            logger.info("Video record not found", video_id=video_id)
+            return None
+            
         except Exception as e:
             logger.error("Failed to get video", video_id=video_id, error=str(e))
             return None

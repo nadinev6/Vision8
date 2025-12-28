@@ -152,11 +152,22 @@ vision8-backend/.env
 vision8-backend/vision8-474519-432333899806.json
 vision8-backend/scripts/sample_video_data_manual_*.json
 
+# Unnecessary files and directories
+vision8
+start-vision8-backend.ps1
+vision8-backend/src/api/comfy
+vision8-backend/src/api/mux_router_fixed.py
+vision8-backend/test_*.py
+vision8-backend/test_*.mp4
+
 # Keep .env.example for reference
 !vision8-backend/.env.example
 
 # Kiro IDE internal files (private documentation, specs, planning)
 .kiro/
+
+# Local testing files
+public/video/Prose.mp4
 
 # Deployment files (contain sensitive info and are environment-specific)
 deploy*.sh

@@ -423,7 +423,7 @@ const VideoChatArea: React.FC<VideoChatAreaProps> = ({
                         </div>
                     )}
                 </div>
-                <div className="flex-1 aspect-video rounded-lg shadow-xl border border-border/50 dark:border-white/10 dark:shadow-[0_0_20px_rgba(255,255,255,0.03)] transition-all duration-300 relative group">
+                <div className="flex-1 aspect-video rounded-lg shadow-xl border border-border/50 dark:border-white/10 dark:shadow-[0_0_20px_rgba(255,255,255,0.03)] transition-all duration-300 relative group mr-2">
                     <MuxVideoPlayer
                         title="Generated Video"
                         src={generatedVideoSrc}

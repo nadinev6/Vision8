@@ -120,7 +120,10 @@ export function useCreditsRemaining(pollInterval: number = 30000) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('authToken')}`
         },
-        body: JSON.stringify({ tool: 'checkCredits' })
+        body: JSON.stringify({ 
+          tool_name: 'checkCredits',
+          parameters: {}
+        })
       });
       
       if (creditsResp.ok) {

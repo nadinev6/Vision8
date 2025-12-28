@@ -10,6 +10,9 @@ import sys
 from contextlib import asynccontextmanager
 from typing import Dict, Any
 
+# Add the src directory to Python path for proper imports
+sys.path.insert(0, os.path.dirname(__file__))
+
 import uvicorn
 import structlog
 from fastapi import FastAPI, Request, status

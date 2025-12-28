@@ -201,7 +201,12 @@ class CacheService:
     def close(self):
         """Close Redis connection"""
         try:
-            self.redis_client.close()
-            logger.info("redis_connection_closed")
+            if self.redis_client is not None:
+                self.redis_client.close()
+                logger.info("redis_connection_closed")
+            else:
+                logger.info("no_redis_connection_to_close")
         except redis.RedisError as e:
             logger.error("redis_connection_close_failed", error=str(e))
+        except Exception as e:
+            logger.error("cache_service_close_failed", error=str(e))

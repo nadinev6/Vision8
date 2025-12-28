@@ -10,11 +10,11 @@ from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
 import structlog
 
-from ..services.mcp_server import mcp_server
+from services.mcp_server import mcp_server
 
 logger = structlog.get_logger()
 
-router = APIRouter(prefix="/api/mcp", tags=["MCP"])
+router = APIRouter(tags=["MCP"])
 
 
 # =========================================================================
@@ -24,6 +24,10 @@ class ToolExecutionRequest(BaseModel):
     """Request model for executing an MCP tool."""
     tool_name: str
     parameters: Dict[str, Any] = {}
+    
+    # Allow for flexible payload formats
+    class Config:
+        extra = "allow"
 
 
 class ToolExecutionResponse(BaseModel):

@@ -22,7 +22,7 @@ class MuxService:
     async def create_upload_url(self):
         """Creates a direct upload URL for client-side uploads."""
         create_upload_request = mux_python.CreateUploadRequest(
-            new_asset_settings=mux_python.CreateAssetRequest(playback_policy=[mux_python.PlaybackPolicy.PUBLIC], mp4_support="standard"),
+            new_asset_settings=mux_python.CreateAssetRequest(playback_policy=[mux_python.PlaybackPolicy.PUBLIC]),
             cors_origin="*"
         )
         try:

@@ -375,26 +375,47 @@ Return format: {"scenes": [...], "transcript": [...]}"""
                 timeout=120  # Longer timeout for video processing
             )
             
+            logger.info("gemini_api_response", 
+                       video_id=video_id,
+                       status_code=response.status_code,
+                       response_headers=dict(response.headers),
+                       response_preview=response.text[:500] if response.text else "No response text")
+            
             if response.status_code == 200:
                 result = response.json()
-                analysis_json = result['candidates'][0]['content']['parts'][0]['text']
-                analysis = json.loads(analysis_json)
                 
-                scenes = analysis.get('scenes', [])
-                transcript = analysis.get('transcript', [])
-                
-                # Add embeddings to scenes
-                for scene in scenes:
-                    scene['embedding'] = await self.generate_text_embedding(
-                        scene.get('scene_summary', '') + ' ' + scene.get('full_description', '')
-                    )
-                
-                logger.info("multimodal_analysis_successful", 
-                           video_id=video_id, 
-                           scenes=len(scenes),
-                           transcript_phrases=len(transcript))
-                
-                return scenes, transcript
+                # Check for successful response structure
+                if 'candidates' in result and len(result['candidates']) > 0:
+                    candidate = result['candidates'][0]
+                    if 'content' in candidate and 'parts' in candidate['content'] and len(candidate['content']['parts']) > 0:
+                        analysis_json = candidate['content']['parts'][0]['text']
+                        analysis = json.loads(analysis_json)
+                        
+                        scenes = analysis.get('scenes', [])
+                        transcript = analysis.get('transcript', [])
+                        
+                        # Add embeddings to scenes
+                        for scene in scenes:
+                            scene['embedding'] = await self.generate_text_embedding(
+                                scene.get('scene_summary', '') + ' ' + scene.get('full_description', '')
+                            )
+                        
+                        logger.info("multimodal_analysis_successful", 
+                                   video_id=video_id, 
+                                   scenes=len(scenes),
+                                   transcript_phrases=len(transcript))
+                        
+                        return scenes, transcript
+                    else:
+                        logger.error("gemini_response_structure_error", 
+                                   video_id=video_id,
+                                   error="Invalid candidate structure",
+                                   candidate_keys=list(candidate.keys()) if candidate else "No candidate")
+                else:
+                    logger.error("gemini_response_structure_error", 
+                               video_id=video_id,
+                               error="No candidates in response",
+                               result_keys=list(result.keys()))
             else:
                 logger.error("gemini_multimodal_api_failed", 
                            video_id=video_id,
@@ -414,12 +435,19 @@ Return format: {"scenes": [...], "transcript": [...]}"""
     async def _upload_video_to_gemini(self, video_path: str, video_id: str) -> Optional[str]:
         """Upload video file to Gemini File API and return the file URI"""
         try:
-            # Use Gemini File API to upload video
+            # Use Gemini File API to upload video with proper multipart fields
             upload_url = f"https://generativelanguage.googleapis.com/upload/v1beta/files?key={self.api_key}"
             
             with open(video_path, 'rb') as video_file:
-                files = {'file': video_file}
-                headers = {'X-Goog-Upload-Protocol': 'multipart'}
+                # Proper Gemini File API multipart upload
+                files = {
+                    'file': (os.path.basename(video_path), video_file, 'video/mp4')
+                }
+                headers = {
+                    'X-Goog-Upload-Protocol': 'multipart',
+                    'X-Goog-Upload-Command': 'upload, finalize',
+                    'Content-Type': 'multipart/related; boundary=boundary'
+                }
                 
                 response = requests.post(upload_url, files=files, headers=headers, timeout=60)
                 

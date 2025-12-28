@@ -253,7 +253,7 @@ class MCPTools:
         
         try:
             # Import the video generation service for concatenation
-            from services.video_generation_service import video_generation_service
+            from .video_generation_service import video_generation_service
             
             result = await video_generation_service.concatenate_videos(
                 video_segments,
@@ -777,8 +777,490 @@ class MCPTools:
         }
     
     # =========================================================================
+    # Tool: analyzeVideoScene
+    # =========================================================================
+    async def analyze_video_scene(
+        self,
+        video_url: str,
+        analysis_type: str = "comprehensive",
+        video_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Analyze video scenes using advanced AI models.
+        
+        Args:
+            video_url: URL or path to the video file
+            analysis_type: Type of analysis ("comprehensive", "scene_detection", "object_tracking")
+            video_name: Optional user-entered name for the video/thread
+            
+        Returns:
+            Dict with analysis results
+        """
+        logger.info("MCP Tool: analyzeVideoScene", video_url=video_url, analysis_type=analysis_type, video_name=video_name)
+        
+        try:
+            # Download the video file first
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                video_response = await client.get(video_url)
+                if video_response.status_code != 200:
+                    return {
+                        "status": "failed",
+                        "error": f"Failed to download video: HTTP {video_response.status_code}",
+                        "message": f"❌ Could not download video from {video_url}"
+                    }
+                
+                # Prepare multipart form data for upload
+                files = {
+                    "file": ("video.mp4", video_response.content, "video/mp4")
+                }
+                
+                data = {
+                    "include_transcription": "false",
+                    "language": "en-US"
+                }
+                
+                # Add video name if provided
+                if video_name:
+                    data["video_name"] = video_name
+                
+                # Upload and analyze the video
+                upload_response = await client.post(
+                    "http://127.0.0.1:8000/api/v1/analysis/upload",
+                    files=files,
+                    data=data
+                )
+                
+                if upload_response.status_code == 200:
+                    result = upload_response.json()
+                    return {
+                        "status": "completed",
+                        "video_url": video_url,
+                        "analysis_type": analysis_type,
+                        "video_id": result.get("video_id"),
+                        "thread_name": result.get("thread_name"),
+                        "results": result,
+                        "message": f"✅ Video scene analysis completed for '{result.get('thread_name', 'video')}'"
+                    }
+                else:
+                    return {
+                        "status": "failed",
+                        "error": f"Upload failed with status {upload_response.status_code}: {upload_response.text}",
+                        "message": f"❌ Scene analysis failed: {upload_response.text}"
+                    }
+            
+        except Exception as e:
+            logger.error("analyzeVideoScene failed", error=str(e))
+            return {
+                "status": "failed",
+                "error": str(e),
+                "message": f"❌ Scene analysis failed: {str(e)}"
+            }
+    
+    # =========================================================================
+    # Tool: listVideoObjects
+    # =========================================================================
+    async def list_video_objects(
+        self,
+        video_url: str,
+        object_types: Optional[List[str]] = None,
+        video_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        List and track objects within video content.
+        
+        Args:
+            video_url: URL or path to the video file
+            object_types: Optional filter for specific object types
+            video_name: Optional user-entered name for the video/thread
+            
+        Returns:
+            Dict with object detection results
+        """
+        logger.info("MCP Tool: listVideoObjects", video_url=video_url, object_types=object_types, video_name=video_name)
+        
+        try:
+            # Download the video file first
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                video_response = await client.get(video_url)
+                if video_response.status_code != 200:
+                    return {
+                        "status": "failed",
+                        "error": f"Failed to download video: HTTP {video_response.status_code}",
+                        "message": f"❌ Could not download video from {video_url}"
+                    }
+                
+                # Prepare multipart form data for upload
+                files = {
+                    "file": ("video.mp4", video_response.content, "video/mp4")
+                }
+                
+                data = {
+                    "include_transcription": "false",
+                    "language": "en-US"
+                }
+                
+                # Add video name if provided
+                if video_name:
+                    data["video_name"] = video_name
+                
+                # Upload and analyze the video
+                upload_response = await client.post(
+                    "http://127.0.0.1:8000/api/v1/analysis/upload",
+                    files=files,
+                    data=data
+                )
+                
+                if upload_response.status_code == 200:
+                    upload_result = upload_response.json()
+                    video_id = upload_result.get("video_id")
+                    thread_name = upload_result.get("thread_name")
+                    
+                    # Extract objects from the analysis results
+                    objects = []
+                    analysis_data = upload_result.get("analysis", {})
+                    
+                    # Try to extract objects from different possible locations in the response
+                    if "objects_detected" in analysis_data:
+                        objects = analysis_data.get("objects_detected", [])
+                    
+                    # If no objects found, try to search for them
+                    if not objects and video_id:
+                        search_response = await client.get(
+                            f"http://127.0.0.1:8000/api/v1/analysis/search",
+                            params={
+                                "query": "objects",
+                                "video_id": video_id,
+                                "max_results": 50
+                            }
+                        )
+                        
+                        if search_response.status_code == 200:
+                            search_result = search_response.json()
+                            for result in search_result.get("results", []):
+                                if "objects" in result:
+                                    objects.extend(result["objects"])
+                    
+                    return {
+                        "status": "completed",
+                        "video_url": video_url,
+                        "object_types": object_types,
+                        "objects": objects,
+                        "video_id": video_id,
+                        "thread_name": thread_name,
+                        "message": f"✅ Object detection completed for '{thread_name or 'video'}'"
+                    }
+                else:
+                    return {
+                        "status": "failed",
+                        "error": f"Upload failed with status {upload_response.status_code}: {upload_response.text}",
+                        "message": f"❌ Object detection failed: {upload_response.text}"
+                    }
+            
+        except Exception as e:
+            logger.error("listVideoObjects failed", error=str(e))
+            return {
+                "status": "failed",
+                "error": str(e),
+                "message": f"❌ Object detection failed: {str(e)}"
+            }
+    
+    # =========================================================================
+    # Tool: transcribeVideoAudio
+    # =========================================================================
+    async def transcribe_video_audio(
+        self,
+        video_url: str,
+        language: str = "auto",
+        video_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Transcribe audio content from video files.
+        
+        Args:
+            video_url: URL or path to the video file
+            language: Language code for transcription ("auto" for auto-detection)
+            video_name: Optional user-entered name for the video/thread
+            
+        Returns:
+            Dict with transcription results
+        """
+        logger.info("MCP Tool: transcribeVideoAudio", video_url=video_url, language=language, video_name=video_name)
+        
+        try:
+            # Download the video file first
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                video_response = await client.get(video_url)
+                if video_response.status_code != 200:
+                    return {
+                        "status": "failed",
+                        "error": f"Failed to download video: HTTP {video_response.status_code}",
+                        "message": f"❌ Could not download video from {video_url}"
+                    }
+                
+                # Prepare multipart form data for upload with transcription
+                files = {
+                    "file": ("video.mp4", video_response.content, "video/mp4")
+                }
+                
+                data = {
+                    "include_transcription": "true",
+                    "language": language if language != "auto" else "en-US"
+                }
+                
+                # Add video name if provided
+                if video_name:
+                    data["video_name"] = video_name
+                
+                # Upload and transcribe the video
+                upload_response = await client.post(
+                    "http://127.0.0.1:8000/api/v1/analysis/upload",
+                    files=files,
+                    data=data
+                )
+                
+                if upload_response.status_code == 200:
+                    result = upload_response.json()
+                    
+                    # Extract transcription data from the response
+                    transcription_data = result.get("transcription", {})
+                    analysis_data = result.get("analysis", {})
+                    
+                    return {
+                        "status": "completed",
+                        "video_url": video_url,
+                        "language": language,
+                        "transcription": {
+                            "status": transcription_data.get("status", "unknown"),
+                            "confidence": transcription_data.get("confidence", 0.0),
+                            "segments_count": transcription_data.get("segments_count", 0),
+                            "word_count": transcription_data.get("word_count", 0),
+                            "job_id": transcription_data.get("job_id")
+                        },
+                        "video_id": result.get("video_id"),
+                        "thread_name": result.get("thread_name"),
+                        "message": f"✅ Audio transcription completed for '{result.get('thread_name', 'video')}'"
+                    }
+                else:
+                    return {
+                        "status": "failed",
+                        "error": f"Upload failed with status {upload_response.status_code}: {upload_response.text}",
+                        "message": f"❌ Audio transcription failed: {upload_response.text}"
+                    }
+            
+        except Exception as e:
+            logger.error("transcribeVideoAudio failed", error=str(e))
+            return {
+                "status": "failed",
+                "error": str(e),
+                "message": f"❌ Audio transcription failed: {str(e)}"
+            }
+
+    # =========================================================================
     # Helper Methods
     # =========================================================================
+    # =========================================================================
+    # Tool: analyzeVideo (Generic)
+    # =========================================================================
+    async def analyze_video(
+        self,
+        video_url: str,
+        video_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Generic video analysis that combines scene analysis, object detection, and transcription.
+        
+        Args:
+            video_url: URL or path to the video file
+            video_name: Optional video name
+        
+        Returns:
+            Dict with comprehensive analysis results
+        """
+        logger.info("MCP Tool: analyzeVideo", video_url=video_url, video_name=video_name)
+        
+        try:
+            # Use the existing analysis service
+            result = await self.analyze_video_scene(
+                video_url=video_url,
+                analysis_type="comprehensive",
+                video_name=video_name
+            )
+            
+            return result
+            
+        except Exception as e:
+            logger.error("analyzeVideo failed", error=str(e))
+            return {
+                "status": "failed",
+                "error": str(e),
+                "message": f"❌ Video analysis failed: {str(e)}"
+            }
+    
+    # =========================================================================
+    # Tool: searchVideoContent
+    # =========================================================================
+    async def search_video_content(
+        self,
+        query: str,
+        video_urls: Optional[List[str]] = None,
+        search_type: str = "semantic",
+        max_results: int = 10
+    ) -> Dict[str, Any]:
+        """
+        Search video content using semantic search with vector embeddings.
+        
+        Args:
+            query: Search query
+            video_urls: Optional list of video URLs to search in
+            search_type: Type of search ("semantic", "exact", "fuzzy")
+            max_results: Maximum number of results
+        
+        Returns:
+            Dict with search results
+        """
+        logger.info("MCP Tool: searchVideoContent", query=query[:50], search_type=search_type)
+        
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                search_params = {
+                    "query": query,
+                    "search_type": search_type,
+                    "max_results": max_results
+                }
+                if video_urls:
+                    search_params["video_urls"] = ",".join(video_urls)
+                
+                response = await client.get(
+                    "http://127.0.0.1:8000/api/v1/analysis/search",
+                    params=search_params
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    return {
+                        "status": "completed",
+                        "query": query,
+                        "results": result.get("results", []),
+                        "total_results": len(result.get("results", [])),
+                        "message": f"✅ Found {len(result.get('results', []))} relevant results"
+                    }
+                else:
+                    return {
+                        "status": "failed",
+                        "error": f"Search failed with status {response.status_code}: {response.text}",
+                        "message": f"❌ Video search failed: {response.text}"
+                    }
+                    
+        except Exception as e:
+            logger.error("searchVideoContent failed", error=str(e))
+            return {
+                "status": "failed",
+                "error": str(e),
+                "message": f"❌ Video search failed: {str(e)}"
+            }
+    
+    # =========================================================================
+    # Tool: getVideoDetails
+    # =========================================================================
+    async def get_video_details(
+        self,
+        video_url: Optional[str] = None,
+        video_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Get details for a specific video including scenes and metadata.
+        
+        Args:
+            video_url: Optional video URL to get details for
+            video_name: Optional video name to get details for
+        
+        Returns:
+            Dict with video details
+        """
+        logger.info("MCP Tool: getVideoDetails", video_url=video_url, video_name=video_name)
+        
+        try:
+            # Use video_name as the ID if provided, or extract from URL
+            video_id = video_name or video_url
+            
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(
+                    f"http://127.0.0.1:8000/api/v1/analysis/details/{video_id}"
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    return {
+                        "status": "completed",
+                        "video_id": video_id,
+                        "details": result,
+                        "message": f"✅ Retrieved details for video '{video_id}'"
+                    }
+                else:
+                    return {
+                        "status": "failed",
+                        "error": f"Details fetch failed with status {response.status_code}: {response.text}",
+                        "message": f"❌ Failed to get video details: {response.text}"
+                    }
+                    
+        except Exception as e:
+            logger.error("getVideoDetails failed", error=str(e))
+            return {
+                "status": "failed",
+                "error": str(e),
+                "message": f"❌ Failed to get video details: {str(e)}"
+            }
+    
+    # =========================================================================
+    # Tool: deleteVideoData
+    # =========================================================================
+    async def delete_video_data(
+        self,
+        video_url: Optional[str] = None,
+        video_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Delete all analysis data for a specific video.
+        
+        Args:
+            video_url: Optional video URL to delete data for
+            video_name: Optional video name to delete data for
+        
+        Returns:
+            Dict with deletion confirmation
+        """
+        logger.info("MCP Tool: deleteVideoData", video_url=video_url, video_name=video_name)
+        
+        try:
+            # Use video_name as the ID if provided, or extract from URL
+            video_id = video_name or video_url
+            
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.delete(
+                    f"http://127.0.0.1:8000/api/v1/analysis/video/{video_id}"
+                )
+                
+                if response.status_code == 200:
+                    return {
+                        "status": "completed",
+                        "video_id": video_id,
+                        "message": f"✅ Deleted analysis data for video '{video_id}'"
+                    }
+                else:
+                    return {
+                        "status": "failed",
+                        "error": f"Delete failed with status {response.status_code}: {response.text}",
+                        "message": f"❌ Failed to delete video data: {response.text}"
+                    }
+                    
+        except Exception as e:
+            logger.error("deleteVideoData failed", error=str(e))
+            return {
+                "status": "failed",
+                "error": str(e),
+                "message": f"❌ Failed to delete video data: {str(e)}"
+            }
+
     def _extract_output_path(self, history: Dict[str, Any], output_type: str = "videos") -> Optional[str]:
         """Extract output path from ComfyUI history."""
         outputs = history.get("outputs", {})
@@ -939,6 +1421,96 @@ MCP_TOOL_DEFINITIONS = [
                 "prompt": {"type": "string", "description": "Creative prompt to analyze"}
             },
             "required": ["prompt"]
+        }
+    },
+    # Video Analysis Tools
+    {
+        "name": "analyzeVideoScene",
+        "description": "Analyze video scenes using advanced AI models for comprehensive scene understanding",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "video_url": {"type": "string", "description": "URL or path to the video file"},
+                "analysis_type": {"type": "string", "enum": ["comprehensive", "scene_detection", "object_tracking"], "default": "comprehensive"},
+                "video_name": {"type": "string", "description": "Optional user-entered name for the video/thread"}
+            },
+            "required": ["video_url"]
+        }
+    },
+    {
+        "name": "listVideoObjects",
+        "description": "List and track objects within video content using object detection",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "video_url": {"type": "string", "description": "URL or path to the video file"},
+                "object_types": {"type": "array", "items": {"type": "string"}, "description": "Optional filter for specific object types"},
+                "video_name": {"type": "string", "description": "Optional user-entered name for the video/thread"}
+            },
+            "required": ["video_url"]
+        }
+    },
+    {
+        "name": "transcribeVideoAudio",
+        "description": "Transcribe audio content from video files with language detection",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "video_url": {"type": "string", "description": "URL or path to the video file"},
+                "language": {"type": "string", "description": "Language code for transcription (auto for auto-detection)", "default": "auto"},
+                "video_name": {"type": "string", "description": "Optional user-entered name for the video/thread"}
+            },
+            "required": ["video_url"]
+        }
+    },
+    {
+        "name": "analyzeVideo",
+        "description": "Upload and analyze a video file for scene analysis, object detection, and transcripts",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "video_url": {"type": "string", "description": "URL or path to the video file to analyze"},
+                "video_id": {"type": "string", "description": "Optional custom video ID"},
+                "include_transcription": {"type": "boolean", "description": "Whether to include accurate audio transcription", "default": False},
+                "language": {"type": "string", "description": "Language code for transcription (e.g., en-US, es-ES)", "default": "en-US"}
+            },
+            "required": ["video_url"]
+        }
+    },
+    {
+        "name": "searchVideoContent",
+        "description": "Search video content using semantic search with vector embeddings",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query"},
+                "min_score": {"type": "number", "description": "Minimum relevance score (0-1)", "default": 0.7},
+                "max_results": {"type": "integer", "description": "Maximum number of results", "default": 20},
+                "video_id": {"type": "string", "description": "Optional filter by specific video"}
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "getVideoDetails",
+        "description": "Get details for a specific video including scenes and metadata",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "video_id": {"type": "string", "description": "The video ID to get details for"}
+            },
+            "required": ["video_id"]
+        }
+    },
+    {
+        "name": "deleteVideoData",
+        "description": "Delete all analysis data for a specific video",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "video_id": {"type": "string", "description": "The video ID to delete"}
+            },
+            "required": ["video_id"]
         }
     }
 ]

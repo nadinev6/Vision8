@@ -17,8 +17,8 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List, Callable
 import structlog
 
-from .mcp_tools import MCPTools, SessionState, MCP_TOOL_DEFINITIONS
-from .comfy_mcp_service import comfy_service
+from services.mcp_tools import MCPTools, SessionState, MCP_TOOL_DEFINITIONS
+from services.comfy_mcp_service import comfy_service
 
 logger = structlog.get_logger()
 
@@ -48,6 +48,13 @@ class MCPServer:
             "checkCredits": self._handle_check_credits,
             "getSessionContext": self._handle_get_session_context,
             "setEnvironmentLock": self._handle_set_environment_lock,
+            "analyzeVideoScene": self._handle_analyze_video_scene,
+            "listVideoObjects": self._handle_list_video_objects,
+            "transcribeVideoAudio": self._handle_transcribe_video_audio,
+            "analyzeVideo": self._handle_analyze_video,
+            "searchVideoContent": self._handle_search_video_content,
+            "getVideoDetails": self._handle_get_video_details,
+            "deleteVideoData": self._handle_delete_video_data,
         }
         
         # Discover workflows on init
@@ -195,6 +202,60 @@ class MCPServer:
             image_path=params.get("image_path", "")
         )
     
+    async def _handle_analyze_video_scene(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle analyzeVideoScene tool call."""
+        return await self.tools.analyze_video_scene(
+            video_url=params.get("video_url"),
+            analysis_type=params.get("analysis_type", "comprehensive"),
+            video_name=params.get("video_name")
+        )
+    
+    async def _handle_list_video_objects(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle listVideoObjects tool call."""
+        return await self.tools.list_video_objects(
+            video_url=params.get("video_url"),
+            object_types=params.get("object_types"),
+            video_name=params.get("video_name")
+        )
+    
+    async def _handle_transcribe_video_audio(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle transcribeVideoAudio tool call."""
+        return await self.tools.transcribe_video_audio(
+            video_url=params.get("video_url"),
+            language=params.get("language", "auto"),
+            video_name=params.get("video_name")
+        )
+    
+    async def _handle_search_video_content(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle searchVideoContent tool call."""
+        return await self.tools.search_video_content(
+            query=params.get("query", ""),
+            video_urls=params.get("video_urls"),
+            search_type=params.get("search_type", "semantic"),
+            max_results=params.get("max_results", 10)
+        )
+    
+    async def _handle_get_video_details(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle getVideoDetails tool call."""
+        return await self.tools.get_video_details(
+            video_url=params.get("video_url"),
+            video_name=params.get("video_name")
+        )
+    
+    async def _handle_delete_video_data(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle deleteVideoData tool call."""
+        return await self.tools.delete_video_data(
+            video_url=params.get("video_url"),
+            video_name=params.get("video_name")
+        )
+    
+    async def _handle_analyze_video(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle analyzeVideo tool call."""
+        return await self.tools.analyze_video(
+            video_url=params.get("video_url"),
+            video_name=params.get("video_name")
+        )
+
     async def _handle_custom_workflow(self, workflow_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Handle execution of a custom discovered workflow."""
         try:
