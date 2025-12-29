@@ -12,6 +12,23 @@ if (!API_KEY) {
 
 import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
 
+export interface Scene {
+  timestamp: number;
+  description: string;
+  keyframeData?: string; // Base64 encoded keyframe image
+}
+
+export interface TranscriptItem {
+  startTime: number;
+  endTime: number;
+  text: string;
+}
+
+export interface TrackedObject {
+  timestamp: number;
+  name: string;
+}
+
 // Initialize GoogleGenAI with error handling
 let ai: GoogleGenAI | null = null;
 try {
@@ -167,40 +184,105 @@ async function getVideoFrames(videoFile: File, maxFrames: number): Promise<{ dat
   });
 }
 
-export async function analyzeVideo(videoFile: File, customVideoId?: string): Promise<{ scenes: Scene[], transcripts: TranscriptItem[], objects: TrackedObject[], videoId?: string, muxPlaybackId?: string }> {
+export async function analyzeVideo(videoFile: File, customVideoId?: string): Promise<{ scenes: Scene[], transcripts: TranscriptItem[], objects: TrackedObject[], videoId?: string, muxPlaybackId?: string, threadName?: string }> {
   console.log("🎬 Starting video analysis...");
   console.log("Video file:", videoFile.name, "Size:", videoFile.size);
 
   // Try backend analysis first
   try {
     console.log("🔄 Attempting backend video analysis...");
-    console.log("Video file details:", {
-      name: videoFile.name,
-      size: videoFile.size,
-      type: videoFile.type
-    });
-
     const backendResult = await analyzeVideoWithBackend(videoFile, customVideoId);
     if (backendResult) {
       console.log("✅ Backend analysis successful:", backendResult);
       return backendResult;
-    } else {
-      console.warn("⚠️ Backend returned null result");
     }
   } catch (backendError) {
     console.error("❌ Backend analysis failed:", backendError);
-    console.warn("⚠️ Falling back to client-side analysis");
   }
 
-  // No client-side fallback - force backend usage for security
-  console.error("❌ Backend analysis failed and client-side analysis is disabled for security");
   throw new Error("Video analysis failed. Backend API is required but unavailable.");
+}
+
+/**
+ * Analyze a Mux asset using the backend API
+ */
+export async function analyzeMuxAsset(muxAssetId: string, videoName?: string): Promise<{ scenes: Scene[], transcripts: TranscriptItem[], objects: TrackedObject[], videoId?: string, muxPlaybackId?: string, threadName?: string }> {
+  console.log(`🎬 Starting analysis for Mux asset: ${muxAssetId}...`);
+
+  try {
+    const backendUrl = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+    const analyzeUrl = `${backendUrl}/analysis/analyze/mux-asset`;
+
+    const response = await fetch(analyzeUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        mux_asset_id: muxAssetId,
+        video_name: videoName,
+        include_transcription: true
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to analyze Mux asset: ${response.status} ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    console.log("📊 Backend Mux analysis result:", result);
+
+    if (result.status === 'success') {
+      // Map backend format to frontend (reusing logic from analyzeVideoWithBackend)
+      if (result.data && result.data.scenes) {
+        const scenes = result.data.scenes.map((s: any) => ({
+          timestamp: (s.start_time_ms || 0) / 1000,
+          description: s.scene_summary || s.description,
+          keyframeData: s.keyframe_data
+        }));
+
+        const transcripts = (result.data.transcript || []).map((t: any) => ({
+          startTime: (t.start_ms || 0) / 1000,
+          endTime: (t.end_ms || 0) / 1000,
+          text: t.text
+        }));
+
+        const objects: any[] = [];
+        result.data.scenes.forEach((s: any) => {
+          if (s.objects_tracked) {
+            s.objects_tracked.forEach((o: any) => {
+              objects.push({
+                timestamp: (s.start_time_ms || 0) / 1000,
+                name: o.label || o.name
+              });
+            });
+          }
+        });
+
+        return {
+          scenes,
+          transcripts,
+          objects,
+          videoId: result.video_id,
+          muxPlaybackId: result.mux_playback_id || muxAssetId, // Fallback if not returned but we have it
+          threadName: result.thread_name
+        };
+      }
+
+      return await convertBackendResultToFrontend(result.video_id, result.thread_name);
+    } else {
+      throw new Error(`Mux analysis failed: ${result.error || 'Unknown error'}`);
+    }
+  } catch (error) {
+    console.error("❌ Mux asset analysis error:", error);
+    throw error;
+  }
 }
 
 /**
  * Analyze video using the backend API
  */
-async function analyzeVideoWithBackend(videoFile: File, customVideoId?: string): Promise<{ scenes: Scene[], transcripts: TranscriptItem[], objects: TrackedObject[], videoId?: string, muxPlaybackId?: string } | null> {
+async function analyzeVideoWithBackend(videoFile: File, customVideoId?: string): Promise<{ scenes: Scene[], transcripts: TranscriptItem[], objects: TrackedObject[], videoId?: string, muxPlaybackId?: string, threadName?: string } | null> {
   try {
     const formData = new FormData();
     formData.append('file', videoFile);
@@ -226,11 +308,60 @@ async function analyzeVideoWithBackend(videoFile: File, customVideoId?: string):
     console.log("📊 Backend analysis result:", result);
 
     if (result.status === 'success') {
-      // Convert backend format to frontend format
+      // Use direct data validation if available
+      if (result.data && result.data.scenes) {
+        console.log("✅ Using direct analysis data from backend");
+
+        // Map backend format to frontend
+        const scenes = result.data.scenes.map((s: any) => ({
+          timestamp: (s.start_time_ms || 0) / 1000,
+          description: s.scene_summary || s.description,
+          keyframeData: s.keyframe_data // Pass base64 keyframe
+        }));
+
+        const transcripts = (result.data.transcript || []).map((t: any) => ({
+          startTime: (t.start_ms || 0) / 1000,
+          endTime: (t.end_ms || 0) / 1000,
+          text: t.text
+        }));
+
+        // Objects might be in scenes
+        const objects: any[] = [];
+        result.data.scenes.forEach((s: any) => {
+          if (s.objects_tracked) {
+            s.objects_tracked.forEach((o: any) => {
+              objects.push({
+                timestamp: (s.start_time_ms || 0) / 1000,
+                name: o.label || o.name
+              });
+            });
+          }
+        });
+
+        // Try to get video details just for Mux ID
+        let muxPlaybackId: string | undefined;
+        try {
+          const videoDetails = await getVideoDetails(result.video_id);
+          if (videoDetails?.mux_playback_id) {
+            muxPlaybackId = videoDetails.mux_playback_id;
+          }
+        } catch (e) {
+          console.warn("Could not fetch Mux ID for analyzed video");
+        }
+
+        return {
+          scenes,
+          transcripts,
+          objects,
+          videoId: result.video_id,
+          muxPlaybackId,
+          threadName: result.thread_name
+        };
+      }
+
+      // Fallback to search if data missing (backward compatibility)
       console.log("📊 Converting backend result with video_id:", result.video_id, "thread_name:", result.thread_name);
-      const frontendResult = await convertBackendResultToFrontend(result.video_id, result.thread_name);
-      console.log("✅ Frontend conversion complete:", frontendResult);
-      return frontendResult;
+      return await convertBackendResultToFrontend(result.video_id, result.thread_name);
     } else {
       throw new Error(`Backend analysis failed: ${result.error || 'Unknown error'}`);
     }
@@ -246,19 +377,19 @@ async function getVideoDetails(videoId: string): Promise<{ mux_playback_id?: str
   try {
     const backendUrl = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
     const response = await fetch(`${backendUrl}/analysis/video/${videoId}`);
-    
+
     // If the endpoint returns 404, it's likely because this video doesn't have Mux details
     // This is normal behavior and we should return null without logging an error
     if (response.status === 404) {
       console.log("Video details not found (no Mux playback ID) - this is normal for analyzed videos");
       return null;
     }
-    
+
     if (!response.ok) {
       console.warn(`Video details request failed with status ${response.status}`);
       return null;
     }
-    
+
     const data = await response.json();
     return data.video;
   } catch (e) {
@@ -273,12 +404,12 @@ async function getVideoDetails(videoId: string): Promise<{ mux_playback_id?: str
 async function convertBackendResultToFrontend(videoId: string, threadName?: string): Promise<{ scenes: any[], transcripts: any[], objects: any[], videoId: string, muxPlaybackId?: string, threadName?: string }> {
   try {
     console.log("🔍 Searching for scenes with video_id:", videoId, "thread_name:", threadName);
-    
+
     // Search for all scenes from this video using the backend search
     const backendUrl = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
     const searchUrl = `${backendUrl}/analysis/search?query=${encodeURIComponent('*')}&video_id=${encodeURIComponent(videoId)}&max_results=50`;
     console.log("🔗 Search URL:", searchUrl);
-    
+
     const response = await fetch(searchUrl);
 
     if (!response.ok) {

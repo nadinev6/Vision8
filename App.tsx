@@ -12,7 +12,7 @@ import VideoNameDialog from './components/VideoNameDialog';
 import UserProfilePage from './components/UserProfilePage';
 import { LogoIcon, UserIcon, FolderIcon, BarChartIcon } from './components/icons';
 import ThemeToggle from './components/ThemeToggle';
-import { analyzeVideo, generateChatResponseWithRAG, VideoSettingsCallbacks, GenerationSettingsCallbacks } from './lib/gemini';
+import { analyzeVideo, analyzeMuxAsset, generateChatResponseWithRAG, VideoSettingsCallbacks, GenerationSettingsCallbacks } from './lib/gemini';
 import { getHistory, saveHistory, ChatSession } from './lib/history';
 import { uploadVideo } from './lib/storage';
 import './lib/cache-debug'; // Load cache debug utilities
@@ -104,6 +104,44 @@ const AuthenticatedApp: React.FC = () => {
     }, [videoFile]);
 
 
+
+    const handleVideoSelect = (asset: any) => {
+        console.log("handleVideoSelect called with asset:", asset);
+
+        // Check if session for this asset already exists
+        const existingSession = history.find(s => s.muxPlaybackId === asset.playback_id);
+
+        if (existingSession) {
+            handleSelectSession(existingSession.id);
+            toast.success('Session loaded', {
+                description: `Previous analysis for "${asset.title}" loaded.`,
+            });
+        } else {
+            // Create new session for this existing asset
+            const newSession: ChatSession = {
+                id: Date.now().toString(),
+                name: asset.title || `Video ${asset.asset_id.substring(0, 8)}`,
+                createdAt: new Date().toISOString(),
+                videoName: asset.title,
+                messages: [],
+                scenes: asset.scenes || [],
+                transcripts: asset.transcripts || [],
+                objects: asset.objects || [],
+                lastTimestamp: 0,
+                videoId: asset.id,
+                muxPlaybackId: asset.playback_id
+            };
+
+            setHistory(prev => [newSession, ...prev]);
+            setCurrentSessionId(newSession.id);
+            setVideoFile(null); // Clear local file if any
+            setVideoSrc(null);
+
+            toast.success('Video loaded from library', {
+                description: `"${newSession.name}" is ready.`,
+            });
+        }
+    };
 
     const handleVideoUpload = async (file: File) => {
         console.log("handleVideoUpload called with file:", file.name, file.type, "Size:", file.size);
@@ -287,13 +325,14 @@ const AuthenticatedApp: React.FC = () => {
 
 
     const handleAnalyze = async () => {
-        if (!videoFile || !currentSessionId) {
+        const hasVideo = !!videoFile || !!currentSession?.muxPlaybackId;
+        if (!hasVideo || !currentSessionId) {
             setAnalysisError("Please select a video and session.");
             return;
         }
 
         // Show dialog to get video name
-        const defaultName = videoFile.name.replace(/\.[^/.]+$/, ''); // Remove extension
+        const defaultName = videoFile ? videoFile.name.replace(/\.[^/.]+$/, '') : (currentSession?.videoName || 'Video analysis');
         setPendingVideoName(defaultName);
         setShowVideoNameDialog(true);
     };
@@ -347,9 +386,19 @@ const AuthenticatedApp: React.FC = () => {
         setAnalysisError(null);
 
         try {
-            const result = await analyzeVideo(videoFile, videoName);
+            let result;
+            if (videoFile) {
+                result = await analyzeVideo(videoFile, videoName);
+            } else if (currentSession?.muxPlaybackId) {
+                // If it's a Mux asset, analyze it using the asset ID
+                // Note: currentSession.videoId should hold the Mux Asset ID if it was imported correctly
+                const assetId = currentSession.videoId || currentSession.muxPlaybackId;
+                result = await analyzeMuxAsset(assetId, videoName);
+            } else {
+                throw new Error("No video file or Mux asset available for analysis.");
+            }
             console.log("📹 Analysis complete, updating session with result:", result);
-            
+
             const summaryText = `I've finished analyzing the video. I identified ${result.scenes.length} distinct scenes, ${result.transcripts.length} transcript entries, and found ${result.objects.length} unique objects. You can now explore the details in the panel on the right or ask me specific questions about the content.`;
             const assistantMessage: AssistantMessage = {
                 id: `assistant-${Date.now()}`,
@@ -358,11 +407,11 @@ const AuthenticatedApp: React.FC = () => {
             };
 
             setHistory(prev => prev.map(s => s.id === currentSessionId ? {
-                ...s, 
+                ...s,
                 ...result, // This includes scenes, transcripts, objects, videoId, muxPlaybackId
                 messages: [...s.messages.filter(m => m.id !== reasoningId), assistantMessage]
             } : s));
-            
+
             console.log("✅ Session updated with analysis results and videoId:", result.videoId);
         } catch (error: any) {
             console.error("Video analysis failed:", error);
@@ -551,8 +600,10 @@ const AuthenticatedApp: React.FC = () => {
                             onTimeUpdate={handleVideoTimeUpdate}
                             onVideoDurationChange={handleVideoDurationChange}
                             videoSrc={videoSrc}
+                            playbackId={currentSession?.muxPlaybackId || null}
                             generatedVideoSrc={generatedVideoSrc}
                             onVideoUpload={handleVideoUpload}
+                            onVideoSelect={handleVideoSelect}
                             onAnalyze={handleAnalyze}
                             isAnalyzing={isAnalyzing}
                             messages={messages}

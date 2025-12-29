@@ -3,11 +3,13 @@ import { LightbulbIcon as Lightbulb, MicIcon as Mic, VideoSearchIcon, VideoIcon,
 import { AiGenerate2Line, GenerateImageIcon, Image } from './svg.tsx';
 import { cn } from '../lib/utils';
 import VideoGenerationDialog from './VideoGenerationDialog';
+import MuxAssetImportDialog from './MuxAssetImportDialog';
 import { searchEnhanced } from '../lib/backend-integration';
 import { imageGenerationService } from '../lib/image-generation';
 
 interface AIChatInputProps {
   onVideoUpload: (file: File) => void;
+  onVideoSelect?: (asset: any) => void;
   onAnalyze: () => void;
   isAnalyzing: boolean;
   isVideoLoaded: boolean;
@@ -16,12 +18,13 @@ interface AIChatInputProps {
   currentVideoId?: string; // Add video ID for search context
 }
 
-const AIChatInput: React.FC<AIChatInputProps> = ({ onVideoUpload, onAnalyze, isAnalyzing, isVideoLoaded, onSendMessage, onVideoGenerate, currentVideoId }) => {
+const AIChatInput: React.FC<AIChatInputProps> = ({ onVideoUpload, onVideoSelect, onAnalyze, isAnalyzing, isVideoLoaded, onSendMessage, onVideoGenerate, currentVideoId }) => {
   const [isActive, setIsActive] = useState(false);
   const [videoSearchActive, setVideoSearchActive] = useState(false);
   const [generateVideoActive, setGenerateVideoActive] = useState(false);
   const [generateImageActive, setGenerateImageActive] = useState(false);
   const [showGenerateDialog, setShowGenerateDialog] = useState(false);
+  const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const wrapperRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -105,8 +108,9 @@ const AIChatInput: React.FC<AIChatInputProps> = ({ onVideoUpload, onAnalyze, isA
 
   const handleSend = async () => {
     if (inputValue.trim()) {
-      // If Video Search is active, perform Elasticsearch search
-      if (videoSearchActive) {
+      if (generateImageActive) {
+        await handleGenerateImage();
+      } else if (videoSearchActive) {
         await handleVideoSearch(inputValue.trim());
       } else {
         onSendMessage(inputValue.trim());
@@ -173,7 +177,7 @@ const AIChatInput: React.FC<AIChatInputProps> = ({ onVideoUpload, onAnalyze, isA
       // Send message about generation start
       onSendMessage(`Image generation started: "${inputValue.trim()}"\nJob ID: ${response.job_id}`);
 
-      // Reset input and toggle
+      // Reset input (keep toggle active or deactivate? Deactivating seems safer to return to chat mode)
       setInputValue('');
       setGenerateImageActive(false);
 
@@ -237,7 +241,7 @@ const AIChatInput: React.FC<AIChatInputProps> = ({ onVideoUpload, onAnalyze, isA
             className="p-3 rounded-full hover:bg-secondary transition"
             title="Upload a video"
             type="button"
-            onClick={handleAttachClick}
+            onClick={() => setShowUploadDialog(true)}
           >
             <VideoIcon size={20} />
           </button>
@@ -257,7 +261,11 @@ const AIChatInput: React.FC<AIChatInputProps> = ({ onVideoUpload, onAnalyze, isA
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={videoSearchActive ? "Search for scenes, dialogue, or objects in your video..." : "Type your message..."}
+              placeholder={
+                generateImageActive ? "Describe the image you want to generate..." :
+                  videoSearchActive ? "Search for scenes, dialogue, or objects..." :
+                    "Type your message..."
+              }
               className="flex-1 border-0 outline-0 rounded-md py-2 text-base bg-transparent w-full font-normal relative z-10 focus:ring-0 dark:text-white dark:placeholder-gray-400"
               onFocus={handleActivate}
             />
@@ -272,7 +280,7 @@ const AIChatInput: React.FC<AIChatInputProps> = ({ onVideoUpload, onAnalyze, isA
           </button>
           <button
             className="flex items-center gap-1 bg-primary hover:bg-primary/90 text-primary-foreground p-3 rounded-full font-medium justify-center transition-all duration-200 hover:scale-105 active:scale-95 shadow-sm hover:shadow-md"
-            title="Send"
+            title={generateImageActive ? "Generate" : "Send"}
             type="button"
             onClick={handleSend}
           >
@@ -393,6 +401,16 @@ const AIChatInput: React.FC<AIChatInputProps> = ({ onVideoUpload, onAnalyze, isA
           </div>
         </div>
       </div>
+
+      {/* Video Upload Dialog */}
+      <MuxAssetImportDialog
+        open={showUploadDialog}
+        onOpenChange={setShowUploadDialog}
+        onImportSuccess={() => console.log('Upload successful!')}
+        onAnalyzeSuccess={(videoId) => console.log('Analysis successful:', videoId)}
+        onSelectExisting={onVideoSelect}
+        mode="chat"
+      />
 
       {/* Video Generation Dialog */}
       {onVideoGenerate && (

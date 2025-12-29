@@ -212,6 +212,7 @@ const AIMessage: React.FC<{
                             h3: ({ children }: any) => <h3 className="text-base font-medium mt-2 mb-1 text-foreground">{children}</h3>,
                             blockquote: ({ children }: any) => <blockquote className="border-l-4 border-primary/30 pl-4 my-2 text-muted-foreground italic">{children}</blockquote>,
                             a: ({ children, href }: any) => <a href={href} className="text-primary hover:text-primary/80 underline" target="_blank" rel="noopener noreferrer">{children}</a>,
+                            img: ({ src, alt }: any) => <img src={src} alt={alt} className="rounded-lg max-w-full h-auto border border-border shadow-sm my-2" />,
                             hr: () => <hr className="my-4 border-border" />,
                         }}>
                             {parts[i]}
@@ -266,7 +267,7 @@ const AIMessage: React.FC<{
                                     console.log(`Option selected for ${timeStr}: ${option}`);
                                     // TODO: Wire up to backend API using fetch
                                     /*
-                                    fetch('/api/v1/mux/scenes/replace', {
+                                    fetch('/mux/scenes/replace', {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
                                         body: JSON.stringify({
@@ -328,8 +329,10 @@ interface VideoChatAreaProps {
     onTimeUpdate: (time: number) => void;
     onVideoDurationChange: (duration: number) => void;
     videoSrc: string | null;
+    playbackId?: string | null;
     generatedVideoSrc: string | null;
     onVideoUpload: (file: File) => void;
+    onVideoSelect?: (asset: any) => void;
     onAnalyze: () => void;
     isAnalyzing: boolean;
     messages: Message[];
@@ -370,8 +373,10 @@ const VideoChatArea: React.FC<VideoChatAreaProps> = ({
     onTimeUpdate,
     onVideoDurationChange,
     videoSrc,
+    playbackId,
     generatedVideoSrc,
     onVideoUpload,
+    onVideoSelect,
     onAnalyze,
     isAnalyzing,
     messages,
@@ -392,26 +397,27 @@ const VideoChatArea: React.FC<VideoChatAreaProps> = ({
 }) => {
     const [primaryTime, setPrimaryTime] = useState(0);
     const [primaryDuration, setPrimaryDuration] = useState(0);
-    
+
     const handlePrimaryTimeUpdate = (time: number) => {
         setPrimaryTime(time);
         onTimeUpdate?.(time);
     };
-    
+
     const handlePrimaryDurationChange = (duration: number) => {
         setPrimaryDuration(duration);
         onVideoDurationChange?.(duration);
     };
-    
+
     return (
-        <div className="flex-1 flex flex-col p-4 gap-4 min-w-0 relative">
+        <div className="flex-1 flex flex-col p-6 gap-6 min-w-0 relative">
             {/* Video Players */}
-            <div className="flex gap-4">
+            <div className="flex gap-6">
                 <div className="flex-1 aspect-video rounded-lg shadow-xl border border-border/50 dark:border-white/10 dark:shadow-[0_0_20px_rgba(255,255,255,0.03)] transition-all duration-300 relative group">
                     <MuxVideoPlayer
                         ref={primaryVideoRef}
                         title="Upload a video to begin"
                         src={videoSrc}
+                        playbackId={playbackId}
                         className="w-full h-full rounded-lg"
                         onTimeUpdate={handlePrimaryTimeUpdate}
                         onDurationChange={handlePrimaryDurationChange}
@@ -423,7 +429,7 @@ const VideoChatArea: React.FC<VideoChatAreaProps> = ({
                         </div>
                     )}
                 </div>
-                <div className="flex-1 aspect-video rounded-lg shadow-xl border border-border/50 dark:border-white/10 dark:shadow-[0_0_20px_rgba(255,255,255,0.03)] transition-all duration-300 relative group mr-2">
+                <div className="flex-1 aspect-video rounded-lg shadow-xl border border-border/50 dark:border-white/10 dark:shadow-[0_0_20px_rgba(255,255,255,0.03)] transition-all duration-300 relative group">
                     <MuxVideoPlayer
                         title="Generated Video"
                         src={generatedVideoSrc}
@@ -467,9 +473,10 @@ const VideoChatArea: React.FC<VideoChatAreaProps> = ({
                 <div className="p-3 flex justify-center">
                     <AIChatInput
                         onVideoUpload={onVideoUpload}
+                        onVideoSelect={onVideoSelect}
                         onAnalyze={onAnalyze}
                         isAnalyzing={isAnalyzing}
-                        isVideoLoaded={!!videoSrc}
+                        isVideoLoaded={!!videoSrc || !!playbackId}
                         onSendMessage={onSendMessage}
                         onVideoGenerate={onVideoGenerate}
                     />

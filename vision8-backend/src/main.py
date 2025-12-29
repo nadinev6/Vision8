@@ -1,9 +1,4 @@
-"""
-Vision8 Backend - Main Application Entry Point
-
-This module initializes and configures the FastAPI application with all necessary
-middleware, services, and API routes for intelligent video processing and search.
-"""
+"""Production Vision8 Backend - Fixed Routing Issues"""
 
 import os
 import sys
@@ -11,7 +6,11 @@ from contextlib import asynccontextmanager
 from typing import Dict, Any
 
 # Add the src directory to Python path for proper imports
-sys.path.insert(0, os.path.dirname(__file__))
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)  # vision8-backend directory
+src_dir = current_dir  # This is already the src directory
+sys.path.insert(0, src_dir)
+sys.path.insert(0, parent_dir)
 
 import uvicorn
 import structlog
@@ -27,7 +26,7 @@ from datetime import datetime
 # Load environment variables
 load_dotenv()
 
-# Simple settings for now - will be replaced with proper config module later
+# Simple settings for production
 class SimpleSettings:
     API_HOST = os.getenv("API_HOST", "0.0.0.0")
     API_PORT = int(os.getenv("API_PORT", 8000))
@@ -35,37 +34,18 @@ class SimpleSettings:
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
     API_BASE_URL = os.getenv("API_BASE_URL", f"http://{os.getenv('API_HOST', '0.0.0.0')}:{os.getenv('API_PORT', 8000)}")
     CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001,http://localhost:5173,https://vision8-e7683.web.app,https://vision8-e7683.firebaseapp.com").split(",")
-    # Placeholder configs for services
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
     GEMINI_MODEL_NAME = os.getenv("GEMINI_MODEL_NAME", "gemini-2.5-flash-preview-05-20")
 
-
-    # Validate critical environment variables
     @classmethod
     def validate_config(cls):
         missing_vars = []
         if not cls.GEMINI_API_KEY:
             missing_vars.append("GEMINI_API_KEY")
-        # Elasticsearch no longer required
-
         if missing_vars:
-            logger.warning("Missing environment variables", missing=missing_vars)
+            print(f"Warning: Missing environment variables: {missing_vars}")
             return False
         return True
-    VECTOR_CACHE_SIZE = int(os.getenv("VECTOR_CACHE_SIZE", 1000))
-    VECTOR_CACHE_TTL = int(os.getenv("VECTOR_CACHE_TTL", 3600))
-    
-    # Audio Processing Configuration
-    GOOGLE_CLOUD_PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT")
-    GOOGLE_APPLICATION_CREDENTIALS = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-    SPEECH_TO_TEXT_LANGUAGE = os.getenv("SPEECH_TO_TEXT_LANGUAGE", "en-US")
-    SPEECH_TO_TEXT_MODEL = os.getenv("SPEECH_TO_TEXT_MODEL", "latest_long")
-    SPEECH_TO_TEXT_ENABLE_WORD_TIMESTAMPS = os.getenv("SPEECH_TO_TEXT_ENABLE_WORD_TIMESTAMPS", "true").lower() == "true"
-    SPEECH_TO_TEXT_ENABLE_PUNCTUATION = os.getenv("SPEECH_TO_TEXT_ENABLE_PUNCTUATION", "true").lower() == "true"
-    
-    # Audio Processing Directories
-    TEMP_AUDIO_DIR = os.path.join(os.path.dirname(__file__), "..", "temp", "audio")
-    EXTRACTED_AUDIO_DIR = os.path.join(os.path.dirname(__file__), "..", "temp", "extracted_audio")
 
 settings = SimpleSettings()
 
@@ -102,32 +82,45 @@ class ServiceRegistry:
         self.metadata_generator = None
         self.conversation_handler = None
         self.cache_service = None
+        self.supabase_service = None
 
     async def initialize(self):
         """Initialize all application services."""
         try:
             logger.info("Initializing application services...")
 
-
             # Initialize Metadata Generator
             try:
                 from services.metadata_generator import MetadataGenerator
                 self.metadata_generator = MetadataGenerator()
-                logger.info("✅ Metadata generator initialized")
+                logger.info("Metadata generator initialized")
             except Exception as e:
-                logger.error("❌ Failed to initialize Metadata generator", error=str(e))
+                logger.error(f"Failed to initialize Metadata generator: {str(e)}")
                 self.metadata_generator = None
 
             # Initialize Cache Service
             try:
                 from services.cache_service import CacheService
                 self.cache_service = CacheService()
-                logger.info("✅ Cache service initialized")
+                logger.info("Cache service initialized")
             except Exception as e:
-                logger.warning("⚠️ Cache service not available, continuing without cache", error=str(e))
+                logger.warning(f"Cache service not available, continuing without cache: {str(e)}")
                 self.cache_service = None
 
-            logger.info("🎉 Service initialization completed")
+            # Initialize Supabase Service
+            try:
+                from services.supabase_service import SupabaseService
+                self.supabase_service = SupabaseService()
+                if self.supabase_service.is_available():
+                    logger.info("Supabase service initialized successfully")
+                else:
+                    logger.warning("Supabase service not available - video search will be disabled")
+                    self.supabase_service = None
+            except Exception as e:
+                logger.warning(f"Supabase service not available, continuing without video search: {str(e)}")
+                self.supabase_service = None
+
+            logger.info("Service initialization completed")
 
         except Exception as e:
             logger.error(f"Failed to initialize services: {str(e)}", exc_info=True)
@@ -137,17 +130,16 @@ class ServiceRegistry:
         """Cleanup and shutdown all services."""
         try:
             logger.info("Shutting down application services...")
-            
+
             # Shutdown cache service
             if self.cache_service:
                 try:
                     self.cache_service.close()
-                    logger.info("✅ Cache service shut down")
+                    logger.info("Cache service shut down")
                 except Exception as e:
-                    logger.error("❌ Cache service shutdown failed", error=str(e))
-            
-            
-            logger.info("🎉 All services shut down successfully")
+                    logger.error(f"Cache service shutdown failed: {str(e)}")
+
+            logger.info("All services shut down successfully")
 
         except Exception as e:
             logger.error(f"Error during service shutdown: {str(e)}", exc_info=True)
@@ -227,48 +219,6 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 # TODO: Implement setup_security_middleware when core modules are ready
 # setup_security_middleware(app, settings)
 
-
-# Enhanced CORS middleware for production search functionality
-@app.middleware("http")
-async def add_cors_headers(request: Request, call_next):
-    """Ensure CORS headers are always present in responses with enhanced support."""
-    
-    # Handle preflight requests immediately
-    if request.method == "OPTIONS":
-        origin = request.headers.get("origin")
-        allowed_origin = origin if origin in settings.CORS_ORIGINS else settings.CORS_ORIGINS[0] if settings.CORS_ORIGINS else "*"
-        
-        return JSONResponse(
-            content={"message": "CORS preflight successful"},
-            headers={
-                "Access-Control-Allow-Origin": allowed_origin,
-                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH",
-                "Access-Control-Allow-Headers": "Accept, Accept-Language, Content-Language, Content-Type, Authorization, X-Requested-With, X-Request-ID, Cache-Control, Pragma",
-                "Access-Control-Expose-Headers": "Content-Type, Content-Length, X-Request-ID",
-                "Access-Control-Max-Age": "86400",
-                "Vary": "Origin"
-            }
-        )
-    
-    # Process regular requests
-    response = await call_next(request)
-    
-    # Add CORS headers to all responses
-    origin = request.headers.get("origin")
-    if origin and origin in settings.CORS_ORIGINS:
-        response.headers["Access-Control-Allow-Origin"] = origin
-    elif settings.CORS_ORIGINS:
-        response.headers["Access-Control-Allow-Origin"] = settings.CORS_ORIGINS[0]
-    else:
-        response.headers["Access-Control-Allow-Origin"] = "*"
-    
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH"
-    response.headers["Access-Control-Allow-Headers"] = "Accept, Accept-Language, Content-Language, Content-Type, Authorization, X-Requested-With, X-Request-ID, Cache-Control, Pragma"
-    response.headers["Access-Control-Expose-Headers"] = "Content-Type, Content-Length, X-Request-ID"
-    response.headers["Access-Control-Max-Age"] = "86400"
-    response.headers["Vary"] = "Origin"
-    
-    return response
 
 # Request logging middleware
 @app.middleware("http")
@@ -380,19 +330,18 @@ async def general_exception_handler(request: Request, exc: Exception):
 # Health check endpoint
 @app.get("/health", tags=["System"])
 async def health_check() -> Dict[str, Any]:
-    """
-    Health check endpoint to verify application status.
-    """
+    """Health check endpoint to verify application status."""
     try:
         return {
             "status": "healthy",
             "version": "1.0.0",
             "services": {
                 "metadata_generator": "active" if service_registry.metadata_generator else "inactive",
-                "cache_service": "active" if service_registry.cache_service else "inactive"
+                "cache_service": "active" if service_registry.cache_service else "inactive",
+                "supabase_service": "active" if service_registry.supabase_service else "inactive"
             },
-            "total_services": 2,
-            "note": "Supabase-powered search enabled"
+            "total_services": 3,
+            "note": "Production Vision8 Backend"
         }
     except Exception as e:
         logger.error(f"Health check failed: {str(e)}")
@@ -460,24 +409,6 @@ async def api_test() -> Dict[str, Any]:
         }
     }
 
-# Explicit OPTIONS handler for all API routes
-@app.options("/api/v1/{path:path}")
-async def options_api_handler(request: Request, path: str):
-    """Handle OPTIONS requests for all API routes"""
-    origin = request.headers.get("origin")
-    allowed_origin = origin if origin in settings.CORS_ORIGINS else settings.CORS_ORIGINS[0]
-    
-    return JSONResponse(
-        content={"message": "CORS preflight successful"},
-        headers={
-            "Access-Control-Allow-Origin": allowed_origin,
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH",
-            "Access-Control-Allow-Headers": "*",
-            "Access-Control-Max-Age": "3600",
-        }
-    )
-
-
 # Include API routes with error handling
 try:
     from api.routes import router as api_router
@@ -514,30 +445,8 @@ try:
 except Exception as e:
     logger.error("❌ Failed to load ComfyUI routes", error=str(e))
 
-try:
-    from api.mcp_router import router as mcp_router
-    app.include_router(mcp_router)
-    logger.info("✅ MCP Server routes loaded")
-except Exception as e:
-    logger.error("❌ Failed to load MCP Server routes", error=str(e))
+# MCP Server routes are now included via the main api_router in api/routes.py
 
-
-# CORS preflight handler
-@app.options("/{path:path}")
-async def options_handler(request: Request, path: str):
-    """Handle CORS preflight requests"""
-    origin = request.headers.get("origin")
-    allowed_origin = origin if origin in settings.CORS_ORIGINS else settings.CORS_ORIGINS[0]
-    
-    return JSONResponse(
-        content={},
-        headers={
-            "Access-Control-Allow-Origin": allowed_origin,
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, HEAD",
-            "Access-Control-Allow-Headers": "*",
-            "Access-Control-Max-Age": "3600",
-        }
-    )
 
 # API Status endpoint
 @app.get("/api/status", tags=["System"])
@@ -591,23 +500,19 @@ async def root() -> Dict[str, str]:
 
 
 def main():
-    """
-    Main entry point for running the application.
-    """
+    """Main entry point for running the application."""
     try:
         logger.info("Starting Vision8 Backend server...")
-        
+
         uvicorn.run(
-            "main:app",
+            app,
             host=settings.API_HOST,
             port=settings.API_PORT,
-            reload=settings.API_DEBUG_MODE,
             log_level=settings.LOG_LEVEL.lower(),
             access_log=True,
-            workers=1 if settings.API_DEBUG_MODE else 4,
             loop="asyncio"
         )
-        
+
     except KeyboardInterrupt:
         logger.info("Received shutdown signal")
     except Exception as e:

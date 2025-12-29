@@ -5,18 +5,24 @@ This module provides endpoints for uploading videos, analyzing content,
 and searching through indexed video data.
 """
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Request
 from typing import Dict, Any, List, Optional
 import structlog
 import asyncio
 import json
 import os
 import uuid
+import requests
+import uuid
+import requests
+import tempfile
 from datetime import datetime
+from pydantic import BaseModel
 
 from services.supabase_service import SupabaseService
 from services.metadata_generator import MetadataGenerator
 from services.audio.audio_transcription_service import AudioTranscriptionService
+from services.mux_service import MuxService
 
 logger = structlog.get_logger()
 
@@ -26,10 +32,11 @@ router = APIRouter(prefix="/analysis", tags=["Video Analysis"])
 supabase_service = None
 metadata_generator = None
 audio_transcription_service = None
+mux_service = None
 
 def initialize_services():
     """Initialize services on demand"""
-    global supabase_service, metadata_generator, audio_transcription_service
+    global supabase_service, metadata_generator, audio_transcription_service, mux_service
 
     if supabase_service is None:
         try:
@@ -58,7 +65,22 @@ def initialize_services():
             logger.error("AudioTranscriptionService initialization failed", error=str(e))
             audio_transcription_service = None
 
+    if mux_service is None:
+        try:
+            logger.info("Initializing MuxService...")
+            mux_service = MuxService()
+            logger.info("MuxService initialized successfully")
+        except Exception as e:
+            logger.error("MuxService initialization failed", error=str(e))
+            mux_service = None
+
     return metadata_generator is not None
+
+class AnalyzeMuxAssetRequest(BaseModel):
+    mux_asset_id: str
+    video_name: Optional[str] = None
+    include_transcription: bool = False
+    language: str = "en-US"
 
 
 @router.post("/upload")
@@ -133,8 +155,10 @@ async def analyze_video(
                    filename=file.filename,
                    content_type=file.content_type)
         
-        # Save uploaded file temporarily
-        temp_file_path = f"/tmp/{video_id}_{file.filename}"
+        # Save uploaded file temporarily - Use cross-platform temp directory
+        temp_dir = tempfile.gettempdir()
+        temp_file_path = os.path.join(temp_dir, f"{video_id}_{file.filename}")
+        
         with open(temp_file_path, "wb") as temp_file:
             content = await file.read()
             temp_file.write(content)
@@ -370,7 +394,11 @@ async def analyze_video(
                 "scenes_failed": failed_count,
                 "supabase_available": supabase_service.is_available() if supabase_service else False
             },
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.utcnow().isoformat(),
+            "data": {
+                "scenes": metadata_result.get("scenes", []),
+                "transcript": metadata_result.get("transcript", [])
+            }
         }
         
         # Add transcription information if available
@@ -399,6 +427,204 @@ async def analyze_video(
                     video_id=video_id, 
                     error=str(e))
         raise HTTPException(status_code=500, detail=f"Video analysis failed: {str(e)}")
+
+@router.post("/analyze/mux-asset")
+async def analyze_mux_asset(request: AnalyzeMuxAssetRequest) -> Dict[str, Any]:
+    """
+    Analyze a Mux asset by downloading it and running metadata generation.
+    
+    This endpoint:
+    1. Fetches asset information from Mux
+    2. Downloads the video file from Mux
+    3. Runs metadata generation on the downloaded file
+    4. Stores results in Supabase for search
+    
+    Args:
+        request: Request containing Mux asset ID and analysis options
+        
+    Returns:
+        Analysis results and storage status
+    """
+    # Initialize services on demand
+    initialize_services()
+    
+    # Check if required services are available
+    if not metadata_generator:
+        raise HTTPException(
+            status_code=503, 
+            detail="Metadata generator not available. Check Gemini API configuration."
+        )
+    
+    if not mux_service:
+        raise HTTPException(
+            status_code=503, 
+            detail="Mux service not available. Check Mux API configuration."
+        )
+    
+    try:
+        # Generate video ID for database operations
+        video_id = str(uuid.uuid4())
+        thread_name = request.video_name or f"Mux Asset {request.mux_asset_id}"
+        
+        logger.info("mux_asset_analysis_started", 
+                   video_id=video_id, 
+                   mux_asset_id=request.mux_asset_id)
+        
+        # Get asset information from Mux
+        asset = await mux_service.get_asset(request.mux_asset_id)
+        if not asset:
+            raise HTTPException(status_code=404, detail="Asset not found in Mux")
+        
+        # Get playback ID for download
+        playback_id = await mux_service.get_playback_id(request.mux_asset_id)
+        if not playback_id:
+            raise HTTPException(status_code=404, detail="Playback ID not found for asset")
+        
+        # Download video from Mux
+        download_url = f"https://stream.mux.com/{playback_id}.mp4"
+        temp_dir = tempfile.gettempdir()
+        temp_file_path = os.path.join(temp_dir, f"mux_{video_id}_{request.mux_asset_id}.mp4")
+        
+        logger.info("downloading_mux_video", 
+                   video_id=video_id, 
+                   playback_id=playback_id,
+                   download_url=download_url)
+        
+        response = requests.get(download_url, stream=True)
+        response.raise_for_status()
+        
+        with open(temp_file_path, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        
+        logger.info("mux_video_downloaded", 
+                   video_id=video_id, 
+                   file_size=os.path.getsize(temp_file_path))
+
+        # 1. Generate audio transcription if requested (REUSED from upload)
+        transcription_result = None
+        transcription_job_id = None
+        
+        if request.include_transcription and audio_transcription_service:
+            try:
+                logger.info("starting_audio_transcription", video_id=video_id)
+                transcription_job_id = await audio_transcription_service.transcribe_video(
+                    video_path=temp_file_path,
+                    video_id=video_id,
+                    language=request.language
+                )
+                
+                # Wait for transcription to complete (with timeout)
+                max_wait_time = 300  # 5 minutes
+                wait_time = 0
+                poll_interval = 5  # 5 seconds
+                
+                while wait_time < max_wait_time:
+                    try:
+                        job_status = await audio_transcription_service.get_transcription_status(transcription_job_id)
+                        if job_status["status"] == "completed":
+                            transcription_result = await audio_transcription_service.get_transcription_result(transcription_job_id)
+                            break
+                        elif job_status["status"] == "failed":
+                            break
+                        await asyncio.sleep(poll_interval)
+                        wait_time += poll_interval
+                    except Exception:
+                        break
+            except Exception as transcription_error:
+                logger.error("transcription_service_failed", video_id=video_id, error=str(transcription_error))
+        
+        # 2. Generate metadata using the downloaded file
+        metadata_result = await metadata_generator.generate_metadata(
+            video_path=temp_file_path,
+            video_id=video_id
+        )
+        
+        if transcription_result:
+            metadata_result["accurate_transcript"] = {
+                "full_transcript": transcription_result.full_transcript,
+                "segments": [
+                    {
+                        "text": s.text,
+                        "start_time_ms": s.start_time_ms,
+                        "end_time_ms": s.end_time_ms,
+                        "confidence": s.confidence
+                    } for s in transcription_result.segments
+                ]
+            }
+
+        # 3. Process and index the metadata (REUSED from upload)
+        documents = []
+        if metadata_result and "scenes" in metadata_result and len(metadata_result["scenes"]) > 0:
+            accurate_transcript = metadata_result.get("accurate_transcript", {})
+            for scene in metadata_result["scenes"]:
+                doc = {
+                    "video_id": video_id,
+                    "scene_id": f"{video_id}_scene_{scene.get('scene_number', len(documents) + 1)}",
+                    "start_time_ms": scene.get("start_time_ms", 0),
+                    "end_time_ms": scene.get("end_time_ms", 5000),
+                    "scene_summary": scene.get("scene_summary", scene.get("summary", f"Scene {len(documents) + 1} content")),
+                    "full_description": scene.get("full_description", scene.get("description", f"Video scene {len(documents) + 1} with visual content")),
+                    "scene_embedding": scene.get("embedding", [0.1] * 768),
+                    "transcript": scene.get("transcript", []),
+                    "objects": scene.get("objects_tracked", scene.get("objects", [])),
+                    "actions": scene.get("actions_detected", scene.get("actions", ["video_content"]))
+                }
+                
+                # Add accurate transcription segments
+                if accurate_transcript and accurate_transcript.get("segments"):
+                    scene_start = doc["start_time_ms"]
+                    scene_end = doc["end_time_ms"]
+                    overlapping = [s for s in accurate_transcript["segments"] if s["start_time_ms"] < scene_end and s["end_time_ms"] > scene_start]
+                    if overlapping:
+                        doc["accurate_transcript"] = {
+                            "segments": overlapping,
+                            "text": " ".join(s["text"] for s in overlapping)
+                        }
+                documents.append(doc)
+        
+        # Store in Supabase
+        stored_count = 0
+        failed_count = 0
+        if documents and supabase_service and supabase_service.is_available():
+            for doc in documents:
+                if await supabase_service.store_video_scene(doc):
+                    stored_count += 1
+                else:
+                    failed_count += 1
+        
+        # Clean up temporary file
+        try:
+            os.remove(temp_file_path)
+        except:
+            pass
+        
+        # Prepare response
+        return {
+            "status": "success",
+            "video_id": video_id,
+            "mux_asset_id": request.mux_asset_id,
+            "thread_name": thread_name,
+            "analysis": {
+                "scenes_analyzed": len(metadata_result.get("scenes", [])),
+                "total_duration_ms": metadata_result.get("duration_ms", 0),
+                "transcript_available": bool(metadata_result.get("transcript")),
+                "objects_detected": len(metadata_result.get("objects", [])),
+            },
+            "timestamp": datetime.utcnow().isoformat(),
+            "data": {
+                "scenes": metadata_result.get("scenes", []),
+                "transcript": metadata_result.get("transcript", [])
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("mux_asset_analysis_failed", 
+                    mux_asset_id=request.mux_asset_id, 
+                    error=str(e))
+        raise HTTPException(status_code=500, detail=f"Mux asset analysis failed: {str(e)}")
 
 
 @router.get("/search")

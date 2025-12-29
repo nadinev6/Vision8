@@ -6,7 +6,7 @@ allowing the frontend/agent to discover and execute MCP tools.
 """
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Dict, Any, List, Optional
 import structlog
 
@@ -24,10 +24,9 @@ class ToolExecutionRequest(BaseModel):
     """Request model for executing an MCP tool."""
     tool_name: str
     parameters: Dict[str, Any] = {}
-    
+
     # Allow for flexible payload formats
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class ToolExecutionResponse(BaseModel):

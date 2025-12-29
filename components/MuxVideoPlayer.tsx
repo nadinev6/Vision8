@@ -3,7 +3,7 @@ import React, { useRef, useEffect, forwardRef, useImperativeHandle } from 'react
 import MuxPlayer from '@mux/mux-player-react';
 
 interface MuxVideoPlayerProps {
-    playbackId: string | null;
+    playbackId?: string | null;
     src?: string | null; // Keep src for compatibility/fallback, though playbackId is preferred for Mux
     title?: string;
     className?: string;
@@ -38,8 +38,19 @@ const MuxVideoPlayer = forwardRef<HTMLVideoElement, MuxVideoPlayerProps>((props,
     // If no source/playbackId, render a placeholder
     if (!props.playbackId && !props.src) {
         return (
-            <div className={`flex items-center justify-center w-full h-full bg-black/80 rounded-lg text-white ${props.className}`}>
-                <p className="text-muted-foreground font-medium">{props.title || "No Video"}</p>
+            <div className={`flex flex-col items-center justify-center w-full h-full bg-gradient-to-br from-[#1a1c2e] to-[#0f111a] rounded-lg border border-white/5 text-white overflow-hidden ${props.className}`}>
+                <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4 transition-transform hover:scale-105 duration-300">
+                    <svg className="w-8 h-8 text-primary/60" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M21 12L7 20V4L21 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                </div>
+                <h3 className="text-lg font-semibold bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60">
+                    {props.title || "Ready to Analyze"}
+                </h3>
+                <p className="text-sm text-muted-foreground mt-2 max-w-[240px] text-center px-4">
+                    Upload a video or select an asset to begin your cinematic production
+                </p>
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_transparent_0%,_rgba(0,0,0,0.4)_100%)] pointer-events-none"></div>
             </div>
         );
     }
@@ -65,21 +76,15 @@ const MuxVideoPlayer = forwardRef<HTMLVideoElement, MuxVideoPlayerProps>((props,
             muted={props.muted}
             autoPlay={props.autoPlay}
             loop={props.loop}
-            onClick={props.onClick}
+            // onClick={props.onClick}
             streamType="on-demand"
-            // Hide default controls if we want to use custom ones entirely, 
-            // but Mux Player controls are usually quite good. 
-            // For now, let's keep them enabled or minimal as per request?
-            // "Replace current HTML5 video players with Mux Player while preserving custom overlay features"
-            // We likely want to hide default controls if we are overlaying our own.
-            // But Mux Player Pro defaults are nice. Let's start with minimal controls to allow our overlays.
-            controls={false}
+            // Enable controls to show Mux's built-in storyboard/hover previews
+            // @ts-ignore
+            controls={true}
             style={{
                 height: '100%',
-                width: '100%',
-                '--media-object-fit': 'contain',
-                '--media-object-position': 'center',
-            } as React.CSSProperties}
+                width: '100%'
+            } as any}
         />
     );
 });

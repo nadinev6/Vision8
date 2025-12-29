@@ -13,6 +13,16 @@ export interface ChatSession {
     lastTimestamp: number;
     videoId?: string;
     muxPlaybackId?: string;
+    generatedVideos?: GeneratedVideo[];
+}
+
+export interface GeneratedVideo {
+    id: string;
+    url: string;
+    prompt: string;
+    model: string;
+    createdAt: string;
+    muxAssetId?: string;
 }
 
 const HISTORY_KEY = 'vision8-chat-history';

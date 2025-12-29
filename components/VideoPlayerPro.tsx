@@ -89,12 +89,12 @@ const VideoPlayerPro = React.forwardRef<HTMLVideoElement, VideoPlayerProProps>((
    */
   const handleTimelineMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (isSlave || !duration) return;
-    
+
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const startPercent = (x / rect.width) * 100;
     const startTime = (startPercent / 100) * duration;
-    
+
     setIsDragging(true);
     setDragStartX(x);
     setDragSelection({ start: startTime, end: startTime });
@@ -102,12 +102,12 @@ const VideoPlayerPro = React.forwardRef<HTMLVideoElement, VideoPlayerProProps>((
 
   const handleTimelineMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!isDragging || !dragSelection || isSlave || !duration) return;
-    
+
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const endPercent = Math.max(0, Math.min(100, (x / rect.width) * 100));
     const endTime = (endPercent / 100) * duration;
-    
+
     setDragSelection({
       start: Math.min(dragSelection.start, endTime),
       end: Math.max(dragSelection.start, endTime),
@@ -405,7 +405,7 @@ const VideoPlayerPro = React.forwardRef<HTMLVideoElement, VideoPlayerProProps>((
               onMouseLeave={handleTimelineMouseUp}
             >
               <div className="absolute top-0 left-0 h-full bg-white rounded-full" style={{ width: `${progress}%` }} />
-              
+
               {/* Drag Selection Overlay */}
               {dragSelection && dragSelection.end > dragSelection.start && (
                 <div
@@ -417,10 +417,10 @@ const VideoPlayerPro = React.forwardRef<HTMLVideoElement, VideoPlayerProProps>((
                   }}
                 />
               )}
-              
+
               <div className={cn("absolute top-1/2 h-3 w-3 bg-white rounded-full transition-opacity", !isSlave && "opacity-0 group-hover:opacity-100")} style={{ left: `${progress}%`, transform: `translate(-50%, -50%)` }} />
             </div>
-            
+
             {/* Selection Info Display */}
             {dragSelection && dragSelection.end > dragSelection.start && (
               <div className="flex items-center justify-between px-2 py-1 text-xs text-muted-foreground bg-muted/50 rounded-sm mt-1">

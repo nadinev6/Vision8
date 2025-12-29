@@ -225,6 +225,18 @@ class MetadataGenerator:
                 "video_info": video_info
             }
             
+            # 4. Extract keyframes for each scene to provide full context
+            try:
+                scene_keyframes = []
+                for scene in scenes:
+                    mid_point_ms = (scene.get('start_time_ms', 0) + scene.get('end_time_ms', 0)) // 2
+                    # Extract frame at midpoint
+                    keyframe_base64 = await self._extract_frame_at_timestamp(video_path, mid_point_ms)
+                    if keyframe_base64:
+                        scene['keyframe_data'] = keyframe_base64
+            except Exception as e:
+                logger.warning("keyframe_extraction_failed", error=str(e))
+
             logger.info("metadata_generation_completed", 
                        video_id=video_id, 
                        scenes_count=len(scenes),
@@ -300,7 +312,8 @@ class MetadataGenerator:
                 
                 if ret:
                     # Save frame to temporary file
-                    temp_path = f"/tmp/frame_{i}.jpg"
+                    temp_dir = tempfile.gettempdir()
+                    temp_path = os.path.join(temp_dir, f"frame_{i}.jpg")
                     cv2.imwrite(temp_path, frame)
                     frame_paths.append(temp_path)
                 
@@ -314,6 +327,35 @@ class MetadataGenerator:
         except Exception as e:
             logger.error("frame_extraction_failed", error=str(e))
             return []
+            
+    async def _extract_frame_at_timestamp(self, video_path: str, timestamp_ms: int) -> Optional[str]:
+        """Extract a single frame at a specific timestamp and return base64"""
+        try:
+            import cv2
+            
+            cap = cv2.VideoCapture(video_path)
+            # Set position in milliseconds
+            cap.set(cv2.CAP_PROP_POS_MSEC, timestamp_ms)
+            ret, frame = cap.read()
+            cap.release()
+            
+            if ret:
+                # Resize if too large to save bandwidth (max 640px width)
+                height, width = frame.shape[:2]
+                if width > 640:
+                    scale = 640 / width
+                    new_width = 640
+                    new_height = int(height * scale)
+                    frame = cv2.resize(frame, (new_width, new_height))
+                
+                # Encode to jpg
+                _, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
+                return base64.b64encode(buffer).decode('utf-8')
+                
+            return None
+        except Exception as e:
+            logger.error("single_frame_extraction_failed", timestamp=timestamp_ms, error=str(e))
+            return None
     
     async def _analyze_video_with_gemini_multimodal(self, video_path: str, video_id: str, duration_ms: int) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
         """

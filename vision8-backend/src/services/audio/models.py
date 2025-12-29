@@ -7,7 +7,7 @@ and validation capabilities for API responses.
 
 from typing import List, Optional, Dict, Any
 from datetime import datetime
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, ConfigDict
 from enum import Enum
 
 
@@ -42,13 +42,12 @@ class WordTimestamp(BaseModel):
         if 'start_time_ms' in values and v < values['start_time_ms']:
             raise ValueError('end_time_ms must be greater than or equal to start_time_ms')
         return v
-    
-    class Config:
-        """Pydantic configuration"""
-        json_encoders = {
+
+    model_config = ConfigDict(
+        json_encoders={
             datetime: lambda v: v.isoformat()
-        }
-        json_schema_extra = {
+        },
+        json_schema_extra={
             "example": {
                 "word": "hello",
                 "start_time_ms": 1000,
@@ -56,6 +55,7 @@ class WordTimestamp(BaseModel):
                 "confidence": 0.95
             }
         }
+    )
 
 
 class TranscriptSegment(BaseModel):
@@ -104,13 +104,12 @@ class TranscriptSegment(BaseModel):
     def word_count(self) -> int:
         """Get number of words in the segment"""
         return len(self.words)
-    
-    class Config:
-        """Pydantic configuration"""
-        json_encoders = {
+
+    model_config = ConfigDict(
+        json_encoders={
             datetime: lambda v: v.isoformat()
-        }
-        schema_extra = {
+        },
+        json_schema_extra={
             "example": {
                 "text": "Hello, how are you today?",
                 "start_time_ms": 1000,
@@ -127,6 +126,7 @@ class TranscriptSegment(BaseModel):
                 ]
             }
         }
+    )
 
 
 class TranscriptionResult(BaseModel):
@@ -198,13 +198,12 @@ class TranscriptionResult(BaseModel):
             if segment.speaker_id:
                 speakers.add(segment.speaker_id)
         return sorted(list(speakers))
-    
-    class Config:
-        """Pydantic configuration"""
-        json_encoders = {
+
+    model_config = ConfigDict(
+        json_encoders={
             datetime: lambda v: v.isoformat()
-        }
-        schema_extra = {
+        },
+        json_schema_extra={
             "example": {
                 "job_id": "550e8400-e29b-41d4-a716-446655440000",
                 "video_id": "sample_video_123",
@@ -229,6 +228,7 @@ class TranscriptionResult(BaseModel):
                 "engine_used": "google"
             }
         }
+    )
 
 
 class TranscriptionJob(BaseModel):
@@ -257,13 +257,12 @@ class TranscriptionJob(BaseModel):
         if self.started_at and self.completed_at:
             return (self.completed_at - self.started_at).total_seconds()
         return None
-    
-    class Config:
-        """Pydantic configuration"""
-        json_encoders = {
+
+    model_config = ConfigDict(
+        json_encoders={
             datetime: lambda v: v.isoformat()
-        }
-        schema_extra = {
+        },
+        json_schema_extra={
             "example": {
                 "job_id": "550e8400-e29b-41d4-a716-446655440000",
                 "video_id": "sample_video_123",
@@ -275,6 +274,7 @@ class TranscriptionJob(BaseModel):
                 "engine": "google"
             }
         }
+    )
 
 
 class TranscriptionError(BaseModel):
@@ -285,13 +285,12 @@ class TranscriptionError(BaseModel):
     retry_after: Optional[int] = Field(None, ge=0, description="Retry delay in seconds")
     job_id: Optional[str] = Field(None, description="Associated job ID if applicable")
     timestamp: datetime = Field(default_factory=datetime.now, description="Error timestamp")
-    
-    class Config:
-        """Pydantic configuration"""
-        json_encoders = {
+
+    model_config = ConfigDict(
+        json_encoders={
             datetime: lambda v: v.isoformat()
-        }
-        schema_extra = {
+        },
+        json_schema_extra={
             "example": {
                 "error_code": "AUDIO_EXTRACTION_FAILED",
                 "error_message": "Failed to extract audio from video file",
@@ -305,6 +304,7 @@ class TranscriptionError(BaseModel):
                 "timestamp": "2024-01-15T10:30:00Z"
             }
         }
+    )
 
 
 class AudioMetadata(BaseModel):
@@ -325,10 +325,9 @@ class AudioMetadata(BaseModel):
     def file_size_mb(self) -> float:
         """Get file size in megabytes"""
         return self.file_size_bytes / (1024 * 1024)
-    
-    class Config:
-        """Pydantic configuration"""
-        schema_extra = {
+
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "duration_ms": 180000,
                 "sample_rate": 16000,
@@ -338,6 +337,7 @@ class AudioMetadata(BaseModel):
                 "file_size_bytes": 5760000
             }
         }
+    )
 
 
 # Utility functions for model conversion

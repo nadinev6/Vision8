@@ -13,6 +13,7 @@ from datetime import datetime
 from api.video_generation_routes import router as generation_router
 from api.video_analysis_routes import router as analysis_router
 from api.image_generation_routes import router as image_router
+from api.mcp_router import router as mcp_router
 
 logger = structlog.get_logger()
 
@@ -23,6 +24,13 @@ router = APIRouter()
 router.include_router(generation_router, prefix="/video")
 router.include_router(analysis_router, prefix="/video")
 router.include_router(image_router, prefix="/api")
+
+# Include Mux router
+from api.mux_router import router as mux_router
+router.include_router(mux_router, prefix="/mux")
+router.include_router(mcp_router, prefix="/mcp")
+
+
 
 # Root API endpoint
 @router.get("/")

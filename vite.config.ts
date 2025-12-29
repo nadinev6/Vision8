@@ -12,6 +12,14 @@ export default defineConfig(({ mode }) => {
         '/api': {
           target: 'http://127.0.0.1:8000',
           changeOrigin: true,
+        },
+        '/mux': {
+          target: 'http://127.0.0.1:8000/api/v1',
+          changeOrigin: true,
+        },
+        '/analysis': {
+          target: 'http://127.0.0.1:8000/api/v1',
+          changeOrigin: true,
         }
       },
     },

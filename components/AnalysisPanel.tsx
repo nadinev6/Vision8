@@ -7,6 +7,7 @@ import { generateThumbnailUrl, hasThumbnailSupport } from '../lib/thumbnail-util
 export interface Scene {
     timestamp: number;
     description: string;
+    keyframeData?: string;
 }
 export interface TranscriptItem {
     startTime: number;
@@ -86,9 +87,11 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ rightPanelWidth, scenes, 
                     <div className={cn("p-2", playbackId ? "grid grid-cols-2 gap-2" : "space-y-1")}>
                         {scenes.map((scene, index) => {
                             const isActive = activeTimestamp === scene.timestamp;
-                            const thumbnailUrl = hasThumbnailSupport(playbackId)
-                                ? generateThumbnailUrl(playbackId, scene.timestamp, 'analysis')
-                                : null;
+                            const thumbnailUrl = scene.keyframeData
+                                ? `data:image/jpeg;base64,${scene.keyframeData}`
+                                : (hasThumbnailSupport(playbackId)
+                                    ? generateThumbnailUrl(playbackId, scene.timestamp, 'analysis')
+                                    : null);
 
                             return (
                                 <button

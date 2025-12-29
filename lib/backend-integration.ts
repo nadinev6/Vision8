@@ -11,7 +11,7 @@ class BackendService {
 
   constructor(config: Partial<BackendConfig> = {}) {
     this.config = {
-      baseUrl: config.baseUrl || (import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:8000',
+      baseUrl: config.baseUrl || (import.meta as any).env?.VITE_API_BASE_URL || '/api/v1',
       timeout: config.timeout || 30000
     };
   }
@@ -73,7 +73,7 @@ class BackendService {
     formData.append('video', videoFile);
     formData.append('options', JSON.stringify(options));
 
-    return this.makeRequest('/api/analyze-video', {
+    return this.makeRequest('/analysis/upload', {
       method: 'POST',
       body: formData,
       headers: {} // Don't set Content-Type for FormData
@@ -84,7 +84,7 @@ class BackendService {
   async generateEmbeddingsBatch(texts: string[]): Promise<number[][]> {
     console.log(`🔗 Generating ${texts.length} embeddings via backend...`);
 
-    return this.makeRequest('/api/embeddings/batch', {
+    return this.makeRequest('/embeddings/batch', {
       method: 'POST',
       body: JSON.stringify({ texts })
     });
@@ -107,7 +107,7 @@ class BackendService {
   }> {
     console.log('🔍 Performing advanced search via backend...');
 
-    return this.makeRequest('/api/search/advanced', {
+    return this.makeRequest('/analysis/search', {
       method: 'POST',
       body: JSON.stringify({ query, ...options })
     });
@@ -122,7 +122,7 @@ class BackendService {
     };
     version: string;
   }> {
-    return this.makeRequest('/api/health');
+    return this.makeRequest('/health'); // Health is at /api/v1/health or /health. Backend has it at /health.
   }
 }
 
@@ -193,8 +193,8 @@ export async function searchEnhanced(
   } = {}
 ): Promise<any[]> {
   try {
-    const backendUrl = (import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:8000';
-    const url = `${backendUrl}/api/v1/analysis/search?query=${encodeURIComponent(query)}&max_results=${options.topK || 5}${options.videoId ? `&video_id=${options.videoId}` : ''}`;
+    const baseUrl = (import.meta as any).env?.VITE_API_BASE_URL || '/api/v1';
+    const url = `${baseUrl}/analysis/search?query=${encodeURIComponent(query)}&max_results=${options.topK || 5}${options.videoId ? `&video_id=${options.videoId}` : ''}`;
 
     const response = await fetch(url);
     if (!response.ok) {

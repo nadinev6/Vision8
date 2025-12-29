@@ -4,20 +4,11 @@ from typing import Optional, Dict, Any
 import os 
 
 # Try to import services with fallback for missing dependencies
-try:
-    from services.mux_service import MuxService
-except ImportError:
-    MuxService = None
-    
-try:
-    from services.comfy_mcp_service import comfy_service
-except ImportError:
-    comfy_service = None
-    
-try:
-    from services.supabase_service import SupabaseService
-except ImportError:
-    SupabaseService = None
+from services.mux_service import MuxService
+
+from services.comfy_mcp_service import comfy_service
+
+from services.supabase_service import SupabaseService
 
 router = APIRouter(prefix="/mux", tags=["mux"])
 
@@ -25,12 +16,22 @@ router = APIRouter(prefix="/mux", tags=["mux"])
 mux_service = MuxService() if MuxService else None
 supabase_service = SupabaseService() if SupabaseService else None
 
+# Log service initialization status
+import structlog
+logger = structlog.get_logger()
+logger.info("Mux Router initialized", mux_service_available=bool(mux_service), supabase_service_available=bool(supabase_service))
+
 class SceneReplacementRequest(BaseModel):
     asset_id: str
     start_time: float
     end_time: float
     option: str # "remove", "budget", "premium", "wan2.2"
     prompt: Optional[str] = None
+
+class ImportMuxAssetRequest(BaseModel):
+    asset_id: str
+    user_id: str
+    title: Optional[str] = None
 
 @router.post("/upload/url")
 async def get_upload_url():
@@ -49,6 +50,70 @@ async def list_assets():
         if not mux_service:
             raise HTTPException(status_code=503, detail="Mux service not available")
         return await mux_service.list_assets()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/assets/import")
+async def import_mux_asset(request: ImportMuxAssetRequest):
+    """
+    Import an existing Mux asset by asset_id.
+    Creates Supabase record linking the asset to the user.
+    """
+    from datetime import datetime
+    
+    try:
+        if not mux_service:
+            raise HTTPException(status_code=503, detail="Mux service not available")
+        
+        if not supabase_service:
+            raise HTTPException(status_code=503, detail="Supabase service not available")
+        
+        # Check if asset already exists in Supabase
+        existing_video = await supabase_service.get_video(request.asset_id)
+        if existing_video:
+            return {
+                "status": "already_exists",
+                "video_id": existing_video.get("id"),
+                "mux_asset_id": request.asset_id
+            }
+        
+        # Fetch asset from Mux
+        asset = await mux_service.get_asset(request.asset_id)
+        if not asset:
+            raise HTTPException(status_code=404, detail="Asset not found in Mux")
+        
+        # Get playback ID
+        playback_id = await mux_service.get_playback_id(request.asset_id)
+        
+        # Get asset title from Mux or use provided title
+        title = request.title or getattr(asset, 'name', None) or f"Imported {request.asset_id}"
+        
+        # Get duration from asset
+        duration = getattr(asset, 'duration', 0) or 0
+        
+        # Create Supabase record
+        video_data = {
+            "user_id": request.user_id,
+            "mux_asset_id": request.asset_id,
+            "mux_playback_id": playback_id,
+            "title": title,
+            "status": "ready",
+            "duration": duration,
+            "created_at": datetime.utcnow().isoformat()
+        }
+        
+        video_id = await supabase_service.create_video_record(video_data)
+        
+        return {
+            "status": "imported",
+            "video_id": video_id,
+            "mux_asset_id": request.asset_id,
+            "mux_playback_id": playback_id,
+            "title": title
+        }
+        
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -73,6 +138,71 @@ async def get_global_analytics(timeframe: Optional[str] = "7:days"):
                 "status": "mock_or_empty"
             }
         return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/user-assets")
+async def get_user_assets_with_engagement(timeframe: Optional[str] = "7:days"):
+    """Get all assets for the current user with engagement metrics"""
+    try:
+        if not mux_service:
+            raise HTTPException(status_code=503, detail="Mux service not available")
+
+        # In a real implementation, we would get the user_id from authentication
+        # For now, we'll fetch all assets (simulating a single user scenario)
+        assets_with_engagement = await mux_service.get_user_assets_with_engagement(timeframe=[timeframe])
+
+        return {
+            "status": "success",
+            "assets": assets_with_engagement,
+            "period": timeframe
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/assets/{asset_id}/engagement")
+async def get_asset_engagement(asset_id: str, timeframe: Optional[str] = "7:days"):
+    """Get engagement metrics for a specific asset"""
+    try:
+        if not mux_service:
+            raise HTTPException(status_code=503, detail="Mux service not available")
+
+        engagement_data = await mux_service.get_asset_with_engagement(asset_id, timeframe=[timeframe])
+
+        if not engagement_data:
+            raise HTTPException(status_code=404, detail="Asset not found or no engagement data available")
+
+        return {
+            "status": "success",
+            "asset_id": asset_id,
+            "engagement": engagement_data["engagement"],
+            "period": timeframe
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+@router.post("/assets/{asset_id}/refresh")
+async def refresh_asset_metadata(asset_id: str):
+    """Refresh metadata for a specific asset (useful after upload completes)"""
+    try:
+        if not mux_service:
+            raise HTTPException(status_code=503, detail="Mux service not available")
+
+        # Get the latest asset data from Mux
+        asset = await mux_service.get_asset(asset_id)
+        if not asset:
+            raise HTTPException(status_code=404, detail="Asset not found")
+
+        # Get playback ID
+        playback_id = await mux_service.get_playback_id(asset_id)
+
+        return {
+            "status": "success",
+            "asset_id": asset_id,
+            "playback_id": playback_id,
+            "title": getattr(asset, 'name', f"Video {asset_id}"),
+            "duration": getattr(asset, 'duration', 0),
+            "status": getattr(asset, 'status', 'unknown')
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

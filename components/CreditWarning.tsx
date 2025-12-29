@@ -37,8 +37,9 @@ export const CreditWarning: React.FC<CreditWarningProps> = ({
   const isWarning = creditsRemaining < CREDIT_WARNING_THRESHOLD;
   const sufficientCredits = creditsRemaining >= estimatedCost;
 
-  if (!isWarning) {
-    return null; // No warning if credits are healthy
+  // Don't show warning if credits haven't loaded, or if they are healthy
+  if (creditsRemaining === null || !isWarning) {
+    return null;
   }
 
   return (
@@ -92,77 +93,7 @@ export const CreditWarning: React.FC<CreditWarningProps> = ({
   );
 };
 
-/**
- * Hook to fetch current credit balance from backend
- * Polls periodically and updates component state
- */
-export function useCreditsRemaining(pollInterval: number = 30000) {
-  const [creditsRemaining, setCreditsRemaining] = useState<number | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  const fetchCredits = React.useCallback(async () => {
-    try {
-      setIsLoading(true);
-      const response = await fetch('/api/mcp/tools', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-        }
-      });
-      if (!response.ok) throw new Error('Failed to fetch credits');
-      
-      const tools = await response.json();
-      // Find checkCredits tool result in tools list if available
-      // Otherwise, make a dedicated checkCredits call
-      const creditsResp = await fetch('/api/mcp/execute', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-        },
-        body: JSON.stringify({ 
-          tool_name: 'checkCredits',
-          parameters: {}
-        })
-      });
-      
-      if (creditsResp.ok) {
-        const data = await creditsResp.json();
-        setCreditsRemaining(data.credits_remaining ?? data.creditsRemaining);
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      setError(message);
-      console.error('Failed to fetch credits:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+import { useCreditsRemaining, estimateGenerationCost } from '../lib/credits';
 
-  useEffect(() => {
-    // Initial fetch
-    fetchCredits();
-
-    // Set up polling
-    const interval = setInterval(fetchCredits, pollInterval);
-    return () => clearInterval(interval);
-  }, [fetchCredits, pollInterval]);
-
-  return { creditsRemaining, isLoading, error, refetch: fetchCredits };
-}
-
-/**
- * Estimate ComfyUI Cloud credits for a generation operation
- * Based on resolution and quality tier
- */
-export function estimateGenerationCost(
-  quality: 'draft' | 'standard' | 'high' | 'ultra' = 'standard'
-): number {
-  const costMap: Record<string, number> = {
-    draft: 10,    // 480p, 20 steps, proxy
-    standard: 20, // 720p, 30 steps
-    high: 50,     // 1080p, 35 steps
-    ultra: 100,   // 4K, 40 steps
-  };
-  return costMap[quality] ?? 20;
-}
+export { useCreditsRemaining, estimateGenerationCost };
