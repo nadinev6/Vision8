@@ -34,6 +34,8 @@ ENV/
 .env.development.local
 .env.test.local
 .env.production.local
+.env.production
+mux-Production.env
 
 # Logs
 logs/
@@ -149,6 +151,7 @@ vision8-backend/venv/
 vision8-backend/cache/
 vision8-backend/temp/
 vision8-backend/.env
+vision8-backend/.env.production
 vision8-backend/vision8-474519-432333899806.json
 vision8-backend/scripts/sample_video_data_manual_*.json
 
