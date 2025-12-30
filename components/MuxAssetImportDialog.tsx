@@ -90,7 +90,6 @@ const MuxAssetImportDialog: React.FC<MuxAssetImportDialogProps> = ({
 
     const handleSelectAsset = (asset: any) => {
         setAssetId(asset.id);
-        setTitle(asset.name || '');
     };
 
     const handleImport = async () => {
@@ -119,7 +118,7 @@ const MuxAssetImportDialog: React.FC<MuxAssetImportDialogProps> = ({
             // Use the actual authenticated user ID
             const userId = userProfile.id;
 
-            const result = await importMuxAsset(assetId.trim(), userId, title.trim() || undefined);
+            const result = await importMuxAsset(assetId.trim(), userId);
 
             setImportResult(result);
 
@@ -174,15 +173,14 @@ const MuxAssetImportDialog: React.FC<MuxAssetImportDialogProps> = ({
         setImportResult(null);
 
         try {
-            const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-            const response = await fetch(`${backendUrl}/api/v1/analysis/analyze/mux-asset`, {
+            const backendUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+            const response = await fetch(`${backendUrl}/analysis/analyze/mux-asset`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
                     mux_asset_id: assetId.trim(),
-                    video_name: title.trim() || undefined,
                     include_transcription: false
                 })
             });
@@ -254,13 +252,24 @@ const MuxAssetImportDialog: React.FC<MuxAssetImportDialogProps> = ({
                     // Use the real upload function
                     const uploadResult = await uploadVideoToMuxComplete(file, userProfile.id);
 
-                    setImportResult({
+                    const resultData = {
                         status: 'imported',
                         mux_asset_id: uploadResult.asset_id,
                         video_id: uploadResult.asset_id,
                         title: uploadResult.title,
                         mux_playback_id: uploadResult.playback_id
-                    });
+                    };
+
+                    setImportResult(resultData);
+
+                    // If in chat mode, also trigger selection to open in player
+                    if (mode === 'chat' && onSelectExisting) {
+                        onSelectExisting({
+                            ...resultData,
+                            playback_id: uploadResult.playback_id,
+                            asset_id: uploadResult.asset_id
+                        });
+                    }
 
                     // Close dialog after a short delay to show success
                     setTimeout(() => {

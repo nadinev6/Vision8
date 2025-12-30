@@ -95,41 +95,54 @@ const AuthenticatedApp: React.FC = () => {
                 setVideoSrc(null);
                 setGeneratedVideoSrc(null);
             }
-        } else {
-            // If videoFile is null, clear the sources
+        } else if (!currentSession?.muxPlaybackId) {
+            // If videoFile is null AND no playbackId, clear the sources
             setVideoSrc(null);
             setGeneratedVideoSrc(null);
-            console.log("Video file is null, clearing video sources.");
+            console.log("No video file and no playback ID, clearing video sources.");
         }
-    }, [videoFile]);
+    }, [videoFile, currentSession?.muxPlaybackId]);
 
 
 
     const handleVideoSelect = (asset: any) => {
         console.log("handleVideoSelect called with asset:", asset);
 
+        // Normalize IDs from various possible shapes
+        const assetId = asset.id || asset.asset_id || asset.mux_asset_id;
+        const playbackId = asset.playback_id || asset.mux_playback_id;
+
+        if (!assetId && !playbackId) {
+            console.error("No valid IDs found in selected asset:", asset);
+            toast.error("Invalid Asset", { description: "The selected video is missing required identifiers." });
+            return;
+        }
+
         // Check if session for this asset already exists
-        const existingSession = history.find(s => s.muxPlaybackId === asset.playback_id);
+        const existingSession = history.find(s =>
+            (assetId && s.videoId === assetId) ||
+            (playbackId && s.muxPlaybackId === playbackId)
+        );
 
         if (existingSession) {
             handleSelectSession(existingSession.id);
             toast.success('Session loaded', {
-                description: `Previous analysis for "${asset.title}" loaded.`,
+                description: `Previous analysis for "${asset.title || asset.name || 'video'}" loaded.`,
             });
         } else {
             // Create new session for this existing asset
             const newSession: ChatSession = {
                 id: Date.now().toString(),
-                name: asset.title || `Video ${asset.asset_id.substring(0, 8)}`,
+                name: asset.title || asset.name || `Video ${assetId?.substring(0, 8) || 'Unknown'}`,
                 createdAt: new Date().toISOString(),
-                videoName: asset.title,
+                videoName: asset.title || asset.name,
                 messages: [],
                 scenes: asset.scenes || [],
                 transcripts: asset.transcripts || [],
                 objects: asset.objects || [],
                 lastTimestamp: 0,
-                videoId: asset.id,
-                muxPlaybackId: asset.playback_id
+                videoId: assetId,
+                muxPlaybackId: playbackId
             };
 
             setHistory(prev => [newSession, ...prev]);
@@ -325,16 +338,20 @@ const AuthenticatedApp: React.FC = () => {
 
 
     const handleAnalyze = async () => {
+        console.log('🔍 handleAnalyze called');
         const hasVideo = !!videoFile || !!currentSession?.muxPlaybackId;
+        console.log('📹 Video check:', { hasVideo, videoFile: !!videoFile, muxPlaybackId: currentSession?.muxPlaybackId, currentSessionId });
+
         if (!hasVideo || !currentSessionId) {
+            console.error('❌ Analysis blocked: missing video or session');
             setAnalysisError("Please select a video and session.");
             return;
         }
 
-        // Show dialog to get video name
-        const defaultName = videoFile ? videoFile.name.replace(/\.[^/.]+$/, '') : (currentSession?.videoName || 'Video analysis');
-        setPendingVideoName(defaultName);
-        setShowVideoNameDialog(true);
+        // Use Asset ID/Title consistent with the session
+        const videoName = videoFile ? videoFile.name.replace(/\.[^/.]+$/, '') : (currentSession?.videoName || 'Video analysis');
+        console.log('✅ Starting analysis with name:', videoName);
+        handleVideoNameConfirm(videoName);
     };
 
     const handleVideoGenerate = async (model: string, frameData: any) => {
@@ -363,7 +380,14 @@ const AuthenticatedApp: React.FC = () => {
     };
 
     const handleVideoNameConfirm = async (videoName: string) => {
-        if (!videoFile || !currentSessionId) return;
+        // Check for either a local video file OR a Mux asset
+        const hasVideo = !!videoFile || !!currentSession?.muxPlaybackId;
+        if (!hasVideo || !currentSessionId) {
+            console.error('❌ handleVideoNameConfirm: Missing video or session', { hasVideo, currentSessionId });
+            return;
+        }
+
+        console.log('📹 handleVideoNameConfirm: Starting analysis', { videoName, hasLocalFile: !!videoFile, hasMuxAsset: !!currentSession?.muxPlaybackId });
 
         const reasoningId = `reasoning-${Date.now()}`;
         const reasoningMessage: ReasoningMessage = {
@@ -389,10 +413,18 @@ const AuthenticatedApp: React.FC = () => {
             let result;
             if (videoFile) {
                 result = await analyzeVideo(videoFile, videoName);
-            } else if (currentSession?.muxPlaybackId) {
-                // If it's a Mux asset, analyze it using the asset ID
-                // Note: currentSession.videoId should hold the Mux Asset ID if it was imported correctly
+            } else if (currentSession?.muxPlaybackId || currentSession?.videoId) {
+                // Determine the best ID to send (Asset ID is preferred over Playback ID)
+                // In Vision8, videoId usually stores the Mux Asset ID for imported assets
                 const assetId = currentSession.videoId || currentSession.muxPlaybackId;
+
+                console.log("🎬 Triggering Mux analysis with:", {
+                    assetId,
+                    playbackId: currentSession.muxPlaybackId,
+                    videoId: currentSession.videoId,
+                    isUsingFallback: !currentSession.videoId && !!currentSession.muxPlaybackId
+                });
+
                 result = await analyzeMuxAsset(assetId, videoName);
             } else {
                 throw new Error("No video file or Mux asset available for analysis.");

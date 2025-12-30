@@ -41,7 +41,7 @@ interface ImageMetadata {
 class ImageGenerationService {
   private backendUrl: string;
 
-  constructor(backendUrl: string = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000') {
+  constructor(backendUrl: string = import.meta.env?.VITE_API_BASE_URL || '/api/v1') {
     this.backendUrl = backendUrl;
   }
 

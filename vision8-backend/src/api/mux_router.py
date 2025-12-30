@@ -13,7 +13,12 @@ from services.supabase_service import SupabaseService
 router = APIRouter(prefix="/mux", tags=["mux"])
 
 # Initialize services with error handling
-mux_service = MuxService() if MuxService else None
+try:
+    mux_service = MuxService() if MuxService else None
+except Exception as e:
+    logger.error(f"Failed to initialize MuxService in router: {e}")
+    mux_service = None
+
 supabase_service = SupabaseService() if SupabaseService else None
 
 # Log service initialization status

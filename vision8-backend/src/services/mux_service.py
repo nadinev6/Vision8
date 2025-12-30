@@ -3,6 +3,7 @@ import mux_python
 from mux_python.rest import ApiException
 import structlog
 import asyncio
+from typing import Optional
 
 logger = structlog.get_logger()
 
@@ -25,6 +26,7 @@ class MuxService:
             self.assets_api = mux_python.AssetsApi(self.api_client)
             self.uploads_api = mux_python.DirectUploadsApi(self.api_client)
             self.metrics_api = mux_python.MetricsApi(self.api_client)
+            self.playback_ids_api = mux_python.PlaybackIDApi(self.api_client)
 
             logger.info("MuxService initialized successfully")
             # Note: Data API might require different auth or structure depending on version
@@ -48,13 +50,29 @@ class MuxService:
             raise e
 
     async def get_asset(self, asset_id):
-        """Retrieves asset details."""
+        """Retrieves asset details. Handles both Asset IDs and Playback IDs."""
         try:
             logger.info(f"Attempting to get Mux asset: {asset_id}")
             loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(None, lambda: self.assets_api.get_asset(asset_id))
-            logger.info(f"Successfully retrieved Mux asset: {asset_id}")
-            return response.data
+            
+            # Direct attempt
+            try:
+                response = await loop.run_in_executor(None, lambda: self.assets_api.get_asset(asset_id))
+                logger.info(f"Successfully retrieved Mux asset: {asset_id}")
+                return response.data
+            except ApiException as e:
+                # Robust check for Playback ID provided error
+                # Check status code and str(e) which contains the body
+                error_str = str(e)
+                if (e.status == 400 or e.status == 404) and ("Playback ID" in error_str or "playback" in error_str.lower()):
+                    logger.info("Provided ID looks like a Playback ID, attempting to resolve Asset ID", playback_id=asset_id)
+                    resolved_asset_id = await self.resolve_asset_id_from_playback_id(asset_id)
+                    if resolved_asset_id:
+                        logger.info(f"Resolved Playback ID {asset_id} to Asset ID {resolved_asset_id}")
+                        response = await loop.run_in_executor(None, lambda: self.assets_api.get_asset(resolved_asset_id))
+                        return response.data
+                raise e
+                
         except ApiException as e:
             logger.error(f"Mux get asset failed for {asset_id}", error=str(e), status_code=e.status if hasattr(e, 'status') else 'unknown')
             return None
@@ -90,6 +108,30 @@ class MuxService:
         except ApiException as e:
              logger.error("Mux create clip failed", error=str(e))
              raise e
+
+    async def resolve_asset_id_from_playback_id(self, playback_id: str) -> Optional[str]:
+        """Resolves a Mux Asset ID from a Playback ID using direct API."""
+        try:
+            logger.info("Resolving asset ID from playback ID", playback_id=playback_id)
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None, 
+                lambda: self.playback_ids_api.get_playback_id(playback_id)
+            )
+            
+            # The response data contains the object_id which is the asset_id if object_type is 'asset'
+            if response and response.data and response.data.object_type == 'asset':
+                asset_id = response.data.object_id
+                logger.info("Successfully resolved playback ID to asset ID", 
+                           playback_id=playback_id, asset_id=asset_id)
+                return asset_id
+            
+            logger.warning("Playback ID resolved to non-asset object", 
+                          playback_id=playback_id, object_type=getattr(response.data, 'object_type', 'unknown'))
+            return None
+        except Exception as e:
+            logger.error("Failed to resolve asset ID from playback ID", error=str(e), playback_id=playback_id)
+            return None
 
     async def list_assets(self):
          """Lists recent assets."""

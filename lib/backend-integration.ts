@@ -58,7 +58,8 @@ class BackendService {
       extractKeyframes?: boolean;
       generateTranscripts?: boolean;
       detectObjects?: boolean;
-      extractAudio?: boolean;
+      videoId?: string;
+      language?: string;
     } = {}
   ): Promise<{
     scenes: any[];
@@ -66,17 +67,31 @@ class BackendService {
     objects: any[];
     keyframes?: string[];
     audioFeatures?: any;
+    videoId?: string;
   }> {
     console.log('🚀 Starting advanced video analysis with backend...');
 
     const formData = new FormData();
-    formData.append('video', videoFile);
-    formData.append('options', JSON.stringify(options));
+    formData.append('file', videoFile); // Changed from 'video' to 'file' to match backend
+
+    if (options.videoId) {
+      formData.append('video_id', options.videoId);
+    }
+
+    if (options.language) {
+      formData.append('language', options.language);
+    }
+
+    // Add other options if supported by backend Form parameters
+    // Currently backend expects flattened Form fields, not a JSON string
+    if (options.generateTranscripts !== undefined) {
+      formData.append('include_transcription', String(options.generateTranscripts));
+    }
 
     return this.makeRequest('/analysis/upload', {
       method: 'POST',
       body: formData,
-      headers: {} // Don't set Content-Type for FormData
+      headers: {} // Don't set Content-Type for FormData, browser sets it with boundary
     });
   }
 
@@ -111,6 +126,41 @@ class BackendService {
       method: 'POST',
       body: JSON.stringify({ query, ...options })
     });
+  }
+
+  // Analyze Mux Asset
+  async analyzeMuxAsset(
+    muxAssetId: string,
+    videoName?: string,
+    options: {
+      includeTranscription?: boolean;
+      language?: string;
+    } = {}
+  ): Promise<any> {
+    console.log(`🎬 Analyzing Mux asset via backend: ${muxAssetId}`);
+
+    return this.makeRequest('/analysis/analyze/mux-asset', {
+      method: 'POST',
+      body: JSON.stringify({
+        mux_asset_id: muxAssetId,
+        video_name: videoName,
+        include_transcription: options.includeTranscription ?? true,
+        language: options.language ?? 'en-US'
+      })
+    });
+  }
+
+  // Get Video Details
+  async getVideoDetails(videoId: string): Promise<any> {
+    try {
+      const data = await this.makeRequest<{ video: any }>(`/analysis/video/${videoId}`);
+      return data.video;
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('404')) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   // Health check

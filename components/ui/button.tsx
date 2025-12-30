@@ -2,7 +2,7 @@ import React from 'react';
 import { cn } from '../../lib/utils';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'default' | 'ghost' | 'outline';
+  variant?: 'default' | 'ghost' | 'outline' | 'destructive';
   size?: 'default' | 'sm' | 'icon';
 }
 
@@ -13,6 +13,7 @@ const Button: React.FC<ButtonProps> = ({ className, variant = 'default', size = 
     default: "bg-primary text-primary-foreground hover:bg-primary/90",
     ghost: "hover:bg-accent hover:text-accent-foreground",
     outline: "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
+    destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
   };
 
   const sizeClasses = {

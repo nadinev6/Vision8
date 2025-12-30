@@ -21,7 +21,7 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from dotenv import load_dotenv
-from datetime import datetime
+from datetime import datetime, UTC
 
 # Load environment variables
 load_dotenv()
@@ -409,7 +409,6 @@ async def api_test() -> Dict[str, Any]:
         }
     }
 
-# Include API routes with error handling
 try:
     from api.routes import router as api_router
     app.include_router(api_router, prefix="/api/v1")
@@ -418,32 +417,24 @@ except Exception as e:
     logger.error("❌ Failed to load main API routes", error=str(e))
 
 try:
-    from api.audio_transcription_routes import router as audio_router
-    app.include_router(audio_router)
-    logger.info("✅ Audio transcription routes loaded")
-except Exception as e:
-    logger.error("❌ Failed to load audio transcription routes", error=str(e))
-
-try:
-    from api.video_analysis_routes import router as video_analysis_router
-    app.include_router(video_analysis_router, prefix="/api/v1")
-    logger.info("✅ Video analysis routes loaded")
-except Exception as e:
-    logger.error("❌ Failed to load video analysis routes", error=str(e))
-
-try:
-    from api.mux_router import router as mux_router
-    app.include_router(mux_router)
-    logger.info("✅ Mux integration routes loaded")
-except Exception as e:
-    logger.error("❌ Failed to load Mux integration routes", error=str(e))
-
-try:
     from api.comfy_router import router as comfy_router
     app.include_router(comfy_router)
     logger.info("✅ ComfyUI routes loaded")
 except Exception as e:
     logger.error("❌ Failed to load ComfyUI routes", error=str(e))
+
+try:
+    from api.mux_router_enhanced import router as mux_router
+    app.include_router(mux_router)
+    logger.info("✅ Enhanced Mux routes loaded")
+except Exception as e:
+    logger.error("❌ Failed to load Enhanced Mux routes", error=str(e))
+    try:
+        from api.mux_router import router as mux_router_basic
+        app.include_router(mux_router_basic)
+        logger.info("✅ Basic Mux routes loaded (fallback)")
+    except Exception as e2:
+        logger.error("❌ Failed to load Basic Mux routes", error=str(e2))
 
 # MCP Server routes are now included via the main api_router in api/routes.py
 

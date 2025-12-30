@@ -6,7 +6,7 @@ functional areas like video processing, search, and generation.
 """
 
 from fastapi import APIRouter, HTTPException, Depends
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import structlog
 from datetime import datetime
 
@@ -22,12 +22,12 @@ router = APIRouter()
 
 # Include sub-routers
 router.include_router(generation_router, prefix="/video")
-router.include_router(analysis_router, prefix="/video")
+router.include_router(analysis_router)
 router.include_router(image_router, prefix="/api")
 
 # Include Mux router
 from api.mux_router import router as mux_router
-router.include_router(mux_router, prefix="/mux")
+router.include_router(mux_router)
 router.include_router(mcp_router, prefix="/mcp")
 
 

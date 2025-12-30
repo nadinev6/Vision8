@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { cn } from '../lib/utils';
-import { AssistantIcon, UserIcon } from './icons';
+import { AssistantIcon, UserIcon, SearchIcon, PlayIcon, PauseIcon, SkipForwardIcon, SkipBackIcon } from './icons';
 import AIChatInput from './AIChatInput';
 import MuxVideoPlayer from './MuxVideoPlayer';
 import AIThinkingBlock from './AIThinkingBlock';
@@ -9,6 +9,10 @@ import { Button } from './ui/button';
 import { Scene, TranscriptItem, TrackedObject } from './AnalysisPanel';
 import { Popover, PopoverTrigger, PopoverContent } from './ui/popover';
 import SceneReplacementActions from './SceneReplacementActions';
+import { useVideoAnalysisService } from '../lib/video-analysis-service';
+import { useVideoAnalysisStorage } from '../lib/video-analysis-storage';
+import { useWebSocketAnalysisService } from '../lib/websocket-analysis-service';
+import { Badge } from './ui/badge';
 
 
 // --- TYPE DEFINITIONS ---
@@ -361,6 +365,10 @@ interface VideoChatAreaProps {
     onGenerationModelChange: (model: 'wan2.2') => void;
     onGenerationFrameRangeChange: (start: number, end: number) => void;
     onGenerationVideoNameChange: (name: string) => void;
+    // Interactive Object Detection Props
+    onObjectClick?: (object: TrackedObject) => void;
+    onObjectEdit?: (object: TrackedObject, operation: 'remove' | 'replace' | 'modify') => void;
+    isInteractiveModeEnabled?: boolean;
 }
 
 const VideoChatArea: React.FC<VideoChatAreaProps> = ({
@@ -393,10 +401,14 @@ const VideoChatArea: React.FC<VideoChatAreaProps> = ({
     onFrameModeChange,
     onGenerationModelChange,
     onGenerationFrameRangeChange,
-    onGenerationVideoNameChange
+    onGenerationVideoNameChange,
+    onObjectClick,
+    onObjectEdit,
+    isInteractiveModeEnabled = false
 }) => {
     const [primaryTime, setPrimaryTime] = useState(0);
     const [primaryDuration, setPrimaryDuration] = useState(0);
+    const [currentFrame, setCurrentFrame] = useState<TrackedObject[]>([]);
 
     const handlePrimaryTimeUpdate = (time: number) => {
         setPrimaryTime(time);
@@ -407,6 +419,33 @@ const VideoChatArea: React.FC<VideoChatAreaProps> = ({
         setPrimaryDuration(duration);
         onVideoDurationChange?.(duration);
     };
+
+    // Update current frame objects based on video time
+    useEffect(() => {
+        const frameObjects = objects.filter(obj => 
+            Math.abs(obj.timestamp - primaryTime) < 0.5
+        );
+        setCurrentFrame(frameObjects);
+    }, [objects, primaryTime]);
+
+    // Handle object click events
+    const handleObjectClick = useCallback((object: TrackedObject, event: React.MouseEvent) => {
+        event.preventDefault();
+        event.stopPropagation();
+        
+        if (onObjectClick) {
+            onObjectClick(object);
+        }
+    }, [onObjectClick]);
+
+    const handleObjectEdit = useCallback((object: TrackedObject, operation: 'remove' | 'replace' | 'modify', event: React.MouseEvent) => {
+        event.preventDefault();
+        event.stopPropagation();
+        
+        if (onObjectEdit) {
+            onObjectEdit(object, operation);
+        }
+    }, [onObjectEdit]);
 
     return (
         <div className="flex-1 flex flex-col p-6 gap-6 min-w-0 relative">
@@ -422,10 +461,101 @@ const VideoChatArea: React.FC<VideoChatAreaProps> = ({
                         onTimeUpdate={handlePrimaryTimeUpdate}
                         onDurationChange={handlePrimaryDurationChange}
                     />
+                    
                     {/* Frame Count Overlay */}
                     {videoSrc && (
                         <div className="absolute top-4 left-4 bg-black/60 backdrop-blur-sm text-white px-3 py-1 rounded-md text-sm font-mono opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                             {Math.floor(primaryTime * 30)} / {Math.floor(primaryDuration * 30)}
+                        </div>
+                    )}
+                    
+                    {/* Interactive Object Detection Overlay */}
+                    {isInteractiveModeEnabled && currentFrame.length > 0 && (
+                        <div className="absolute inset-0 pointer-events-none">
+                            <svg 
+                                className="w-full h-full"
+                                style={{ filter: 'drop-shadow(0 0 8px rgba(59, 130, 246, 0.6))' }}
+                            >
+                                {currentFrame.map((object, index) => {
+                                    // Convert normalized coordinates to absolute percentages
+                                    const left = (object.boundingBox.x * 100);
+                                    const top = (object.boundingBox.y * 100);
+                                    const width = (object.boundingBox.width * 100);
+                                    const height = (object.boundingBox.height * 100);
+                                    
+                                    return (
+                                        <g key={`${object.id}-${index}`}>
+                                            {/* Bounding Box */}
+                                            <rect
+                                                x={`${left}%`}
+                                                y={`${top}%`}
+                                                width={`${width}%`}
+                                                height={`${height}%`}
+                                                fill="none"
+                                                stroke="#3B82F6"
+                                                strokeWidth="2"
+                                                className="pointer-events-auto cursor-pointer transition-all duration-200 hover:stroke-yellow-400"
+                                                onClick={(e) => handleObjectClick(object, e)}
+                                                onContextMenu={(e) => handleObjectEdit(object, 'remove', e)}
+                                            />
+                                            
+                                            {/* Object Label */}
+                                            <text
+                                                x={`${left}%`}
+                                                y={`${Math.max(top - 2, 2)}%`}
+                                                fill="#3B82F6"
+                                                fontSize="12"
+                                                fontWeight="bold"
+                                                className="pointer-events-auto cursor-pointer"
+                                                onClick={(e) => handleObjectClick(object, e)}
+                                            >
+                                                {object.name}
+                                            </text>
+                                            
+                                            {/* Interactive Hotspots */}
+                                            <circle
+                                                cx={`${left + width - 8}%`}
+                                                cy={`${top + 8}%`}
+                                                r="6"
+                                                fill="#10B981"
+                                                stroke="white"
+                                                strokeWidth="1"
+                                                className="pointer-events-auto cursor-pointer transition-all duration-200 hover:fill-green-400 hover:r-8"
+                                                onClick={(e) => handleObjectEdit(object, 'modify', e)}
+                                                title="Edit Object"
+                                            />
+                                            <circle
+                                                cx={`${left + width - 8}%`}
+                                                cy={`${top + height - 8}%`}
+                                                r="6"
+                                                fill="#EF4444"
+                                                stroke="white"
+                                                strokeWidth="1"
+                                                className="pointer-events-auto cursor-pointer transition-all duration-200 hover:fill-red-400 hover:r-8"
+                                                onClick={(e) => handleObjectEdit(object, 'remove', e)}
+                                                title="Remove Object"
+                                            />
+                                        </g>
+                                    );
+                                })}
+                            </svg>
+                            
+                            {/* Instructions Overlay */}
+                            <div className="absolute bottom-4 left-4 right-4 bg-black/60 backdrop-blur-sm text-white px-4 py-2 rounded-lg">
+                                <div className="flex items-center justify-between text-sm">
+                                    <span>Click objects to select • Right-click to remove</span>
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-1">
+                                            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                                            <span className="text-xs">Edit</span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                                            <span className="text-xs">Remove</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>

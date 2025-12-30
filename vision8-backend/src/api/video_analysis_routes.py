@@ -13,8 +13,6 @@ import json
 import os
 import uuid
 import requests
-import uuid
-import requests
 import tempfile
 from datetime import datetime
 from pydantic import BaseModel
@@ -23,6 +21,7 @@ from services.supabase_service import SupabaseService
 from services.metadata_generator import MetadataGenerator
 from services.audio.audio_transcription_service import AudioTranscriptionService
 from services.mux_service import MuxService
+from services.object_editing_service import ObjectEditingService
 
 logger = structlog.get_logger()
 
@@ -33,10 +32,12 @@ supabase_service = None
 metadata_generator = None
 audio_transcription_service = None
 mux_service = None
+object_editing_service = None
+cache_service = None
 
 def initialize_services():
-    """Initialize services on demand"""
-    global supabase_service, metadata_generator, audio_transcription_service, mux_service
+    """Initialize all services lazily on first request."""
+    global metadata_generator, cache_service, supabase_service, mux_service, audio_transcription_service, object_editing_service
 
     if supabase_service is None:
         try:
@@ -74,6 +75,15 @@ def initialize_services():
             logger.error("MuxService initialization failed", error=str(e))
             mux_service = None
 
+    if object_editing_service is None:
+        try:
+            logger.info("Initializing ObjectEditingService...")
+            object_editing_service = ObjectEditingService()
+            logger.info("ObjectEditingService initialized successfully")
+        except Exception as e:
+            logger.error("ObjectEditingService initialization failed", error=str(e))
+            object_editing_service = None
+
     return metadata_generator is not None
 
 class AnalyzeMuxAssetRequest(BaseModel):
@@ -81,6 +91,13 @@ class AnalyzeMuxAssetRequest(BaseModel):
     video_name: Optional[str] = None
     include_transcription: bool = False
     language: str = "en-US"
+
+class EditObjectRequest(BaseModel):
+    video_id: str
+    object_label: str
+    operation: str
+    scene_number: int
+    reference_image_url: Optional[str] = None
 
 
 @router.post("/upload")
@@ -490,16 +507,26 @@ async def analyze_mux_asset(request: AnalyzeMuxAssetRequest) -> Dict[str, Any]:
                    playback_id=playback_id,
                    download_url=download_url)
         
-        response = requests.get(download_url, stream=True)
-        response.raise_for_status()
-        
-        with open(temp_file_path, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
-        
-        logger.info("mux_video_downloaded", 
-                   video_id=video_id, 
-                   file_size=os.path.getsize(temp_file_path))
+        try:
+            response = requests.get(download_url, stream=True, timeout=30)
+            response.raise_for_status()
+            
+            with open(temp_file_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            
+            logger.info("mux_video_downloaded", 
+                       video_id=video_id, 
+                       file_size=os.path.getsize(temp_file_path))
+        except requests.RequestException as download_error:
+            logger.error("mux_video_download_failed",
+                        video_id=video_id,
+                        download_url=download_url,
+                        error=str(download_error))
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to download video from Mux: {str(download_error)}"
+            )
 
         # 1. Generate audio transcription if requested (REUSED from upload)
         transcription_result = None
@@ -825,4 +852,50 @@ async def get_video_details(video_id: str) -> Dict[str, Any]:
         raise
     except Exception as e:
         logger.error("get_video_details_failed", video_id=video_id, error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/edit-object")
+async def edit_object(request: EditObjectRequest) -> Dict[str, Any]:
+    """
+    Perform editing operations on an object in the video.
+    """
+    initialize_services()
+    
+    if not object_editing_service:
+        raise HTTPException(status_code=503, detail="Object editing service not available")
+        
+    try:
+        # Import necessary types from object_editing_service
+        from services.object_editing_service import ObjectEditRequest, EditOperation
+        
+        # Map string operation to Enum
+        try:
+            operation = EditOperation(request.operation.lower())
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid operation: {request.operation}")
+            
+        edit_req = ObjectEditRequest(
+            video_id=request.video_id,
+            scene_number=request.scene_number,
+            object_label=request.object_label,
+            operation=operation,
+            reference_image_url=request.reference_image_url
+        )
+        
+        result = await object_editing_service.execute_object_edit(edit_req, request.reference_image_url)
+        
+        if result.success:
+            return {
+                "status": "success",
+                "message": f"Object {request.operation} operation started successfully",
+                "result_url": result.new_video_path
+            }
+        else:
+            return {
+                "status": "error",
+                "message": result.error_message or "Unknown error occurred during object editing"
+            }
+            
+    except Exception as e:
+        logger.error("edit_object_failed", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))

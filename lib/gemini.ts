@@ -1,16 +1,7 @@
 import { backendService, isBackendAvailable } from './backend-integration';
-
-console.log("🚀 Gemini.ts module loaded!");
-
-// Use environment variable or backend API
-const API_KEY = import.meta.env?.VITE_GEMINI_API_KEY || null;
-if (!API_KEY) {
-  console.log("🔒 No client-side API key - will use backend API for analysis");
-} else {
-  console.log("⚠️ Using client-side API key for testing:", API_KEY.substring(0, 10) + "...");
-}
-
 import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
+
+console.log("🚀 Gemini.ts module loaded - all analysis via backend");
 
 export interface Scene {
   timestamp: number;
@@ -29,38 +20,23 @@ export interface TrackedObject {
   name: string;
 }
 
-// Initialize GoogleGenAI with error handling
+// GoogleGenAI instance - only used for RAG chat, not for video analysis
+// Video analysis always goes through backend
 let ai: GoogleGenAI | null = null;
-try {
-  console.log("Attempting to initialize GoogleGenAI...");
-  console.log("API Key value:", API_KEY);
-  console.log("API Key type:", typeof API_KEY);
 
-  // Try the correct constructor format for @google/genai
-  ai = new GoogleGenAI({ apiKey: API_KEY });
-  console.log("✅ GoogleGenAI initialized successfully");
-
-  // Test the API key with a simple call
-  testApiKey();
-} catch (error) {
-  console.error("❌ Failed to initialize GoogleGenAI:", error);
-  ai = null;
-}
-
-// Simple test function to verify API key works
-async function testApiKey() {
-  if (!ai) return;
-
+// Only initialize GoogleGenAI if we have a client API key for chat features
+// This is optional - the app works fully via backend without it
+const clientApiKey = import.meta.env?.VITE_GEMINI_API_KEY || null;
+if (clientApiKey) {
   try {
-    console.log("🧪 Testing API key with simple call...");
-    const testResponse = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: { parts: [{ text: "Say hello" }] }
-    });
-    console.log("✅ API key test successful:", testResponse.text);
+    ai = new GoogleGenAI({ apiKey: clientApiKey });
+    console.log("✅ GoogleGenAI initialized for chat features");
   } catch (error) {
-    console.error("❌ API key test failed:", error);
+    console.warn("⚠️ GoogleGenAI initialization failed, using backend-only mode:", error);
+    ai = null;
   }
+} else {
+  console.log("🔒 No client API key - using backend-only mode (recommended)");
 }
 
 const analysisSchema = {
@@ -210,26 +186,7 @@ export async function analyzeMuxAsset(muxAssetId: string, videoName?: string): P
   console.log(`🎬 Starting analysis for Mux asset: ${muxAssetId}...`);
 
   try {
-    const backendUrl = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
-    const analyzeUrl = `${backendUrl}/analysis/analyze/mux-asset`;
-
-    const response = await fetch(analyzeUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        mux_asset_id: muxAssetId,
-        video_name: videoName,
-        include_transcription: true
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to analyze Mux asset: ${response.status} ${response.statusText}`);
-    }
-
-    const result = await response.json();
+    const result = await backendService.analyzeMuxAsset(muxAssetId, videoName);
     console.log("📊 Backend Mux analysis result:", result);
 
     if (result.status === 'success') {
@@ -284,27 +241,10 @@ export async function analyzeMuxAsset(muxAssetId: string, videoName?: string): P
  */
 async function analyzeVideoWithBackend(videoFile: File, customVideoId?: string): Promise<{ scenes: Scene[], transcripts: TranscriptItem[], objects: TrackedObject[], videoId?: string, muxPlaybackId?: string, threadName?: string } | null> {
   try {
-    const formData = new FormData();
-    formData.append('file', videoFile);
-    if (customVideoId) {
-      formData.append('video_id', customVideoId);
-    }
-
     console.log("📤 Uploading video to backend for analysis...");
-    const backendUrl = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
-    const uploadUrl = `${backendUrl}/analysis/upload`;
-    console.log("🔗 Using backend URL:", uploadUrl);
 
-    const response = await fetch(uploadUrl, {
-      method: 'POST',
-      body: formData
-    });
-
-    if (!response.ok) {
-      throw new Error(`Backend analysis failed: ${response.status} ${response.statusText}`);
-    }
-
-    const result = await response.json();
+    // Use backendService to handle URL and proxy correctly
+    const result: any = await backendService.analyzeVideoAdvanced(videoFile, {});
     console.log("📊 Backend analysis result:", result);
 
     if (result.status === 'success') {
@@ -375,23 +315,7 @@ async function analyzeVideoWithBackend(videoFile: File, customVideoId?: string):
 
 async function getVideoDetails(videoId: string): Promise<{ mux_playback_id?: string } | null> {
   try {
-    const backendUrl = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
-    const response = await fetch(`${backendUrl}/analysis/video/${videoId}`);
-
-    // If the endpoint returns 404, it's likely because this video doesn't have Mux details
-    // This is normal behavior and we should return null without logging an error
-    if (response.status === 404) {
-      console.log("Video details not found (no Mux playback ID) - this is normal for analyzed videos");
-      return null;
-    }
-
-    if (!response.ok) {
-      console.warn(`Video details request failed with status ${response.status}`);
-      return null;
-    }
-
-    const data = await response.json();
-    return data.video;
+    return await backendService.getVideoDetails(videoId);
   } catch (e) {
     console.warn("Failed to get video details (this is normal for analyzed videos without Mux integration)", e);
     return null;
@@ -406,18 +330,13 @@ async function convertBackendResultToFrontend(videoId: string, threadName?: stri
     console.log("🔍 Searching for scenes with video_id:", videoId, "thread_name:", threadName);
 
     // Search for all scenes from this video using the backend search
-    const backendUrl = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
-    const searchUrl = `${backendUrl}/analysis/search?query=${encodeURIComponent('*')}&video_id=${encodeURIComponent(videoId)}&max_results=50`;
-    console.log("🔗 Search URL:", searchUrl);
+    // Using wildcard query to get everything
+    const searchResult = await backendService.searchAdvanced('*', {
+      videoId: videoId,
+      topK: 50
+    });
 
-    const response = await fetch(searchUrl);
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch scenes for video: ${response.statusText}`);
-    }
-
-    const searchData = await response.json();
-    const searchResults = searchData.results || [];
+    const searchResults = searchResult.results || [];
     console.log("📊 Search results found:", searchResults.length, "scenes");
 
     const scenes: any[] = [];
@@ -499,7 +418,11 @@ async function analyzeVideoClientSide(videoFile: File, customVideoId?: string): 
     console.error("Attempting to reinitialize...");
 
     try {
-      ai = new GoogleGenAI({ apiKey: API_KEY });
+      const fallbackKey = import.meta.env?.VITE_GEMINI_API_KEY;
+      if (!fallbackKey) {
+        throw new Error("No API key available for client-side analysis");
+      }
+      ai = new GoogleGenAI({ apiKey: fallbackKey });
       console.log("✅ Reinitialization successful");
     } catch (reinitError) {
       console.error("❌ Reinitialization failed:", reinitError);
@@ -773,6 +696,26 @@ const setEnvironmentLockTool: any = {
   }
 };
 
+const editObjectTool: any = {
+  name: 'editObject',
+  description: "Performs editing operations on specific objects in the video, such as removal, replacement, or enhancement.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      video_id: { type: Type.STRING, description: "The ID of the video being edited." },
+      object_label: { type: Type.STRING, description: "The label of the object to edit (e.g., 'car', 'person')." },
+      operation: {
+        type: Type.STRING,
+        enum: ['remove', 'replace', 'enhance', 'move', 'resize', 'recolor'],
+        description: "The editing operation to perform."
+      },
+      scene_number: { type: Type.NUMBER, description: "The scene number where the object appears." },
+      reference_image_url: { type: Type.STRING, description: "Optional URL for a reference image (used for replace/enhance)." }
+    },
+    required: ['video_id', 'object_label', 'operation', 'scene_number']
+  }
+};
+
 /**
  * Performs semantic search using the Supabase-backed search endpoint.
  */
@@ -887,7 +830,8 @@ export async function generateChatResponseWithRAG(
       upscaleExistingTool,
       checkCreditsTool,
       getSessionContextTool,
-      setEnvironmentLockTool
+      setEnvironmentLockTool,
+      editObjectTool
     ]
   }];
 
@@ -1374,6 +1318,29 @@ Full control through conversation:
           functionResponse: {
             name: fc.name,
             response: { result: `❌ Set environment lock failed: ${error}` },
+          }
+        };
+      }
+    } else if (fc.name === 'editObject') {
+      const { video_id, object_label, operation, scene_number, reference_image_url } = fc.args as any;
+      try {
+        const response = await fetch(`${mcpBaseUrl}/api/v1/analysis/edit-object`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ video_id, object_label, operation, scene_number, reference_image_url })
+        });
+        const data = await response.json();
+        return {
+          functionResponse: {
+            name: fc.name,
+            response: { result: data.message || `✅ Object ${operation} operation started for '${object_label}'` },
+          }
+        };
+      } catch (error) {
+        return {
+          functionResponse: {
+            name: fc.name,
+            response: { result: `❌ Edit object failed: ${error}` },
           }
         };
       }
