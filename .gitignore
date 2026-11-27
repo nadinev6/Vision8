@@ -176,3 +176,4 @@ PRODUCTION_*.md
 CORS_*.md
 BUILD_*.md
 REDIS_*.md
+.env*
